@@ -928,7 +928,11 @@ public class Emulator {
 
 				Intent intent = mm.getIntent();
 				String action = intent.getAction();
-				boolean viewIntent = Intent.ACTION_VIEW.equals(action);
+				// Beetle Game Room starts a game by its set name: no file to hand over,
+				// MAME finds it on the rompath. The process ends with the game, so the
+				// frontend that sent it comes back to the front.
+				boolean gameRoomPlay = GAME_ROOM_PLAY.equals(action);
+				boolean viewIntent = Intent.ACTION_VIEW.equals(action) || gameRoomPlay;
 
 				boolean isUsingSaf = mm.getPrefsHelper().getROMsDIR() != null && mm.getPrefsHelper().getROMsDIR().length() != 0;
 				if (isUsingSaf) {
@@ -998,6 +1002,10 @@ public class Emulator {
 					// Some providers hand back a URI we cannot name: no display name
 					// and no usable path.  Without a file name there is nothing to
 					// launch, so take the same exit as any other unreadable file.
+					if (gameRoomPlay) {
+						fileName = intent.getStringExtra("game");
+						error = fileName == null || !fileName.matches("[A-Za-z0-9_]+");
+					}
 					if (fileName == null || fileName.length() == 0)
 						error = true;
 
@@ -1034,6 +1042,7 @@ public class Emulator {
 					}
 				}
 
+				gameRoomLaunch = gameRoomPlay;
 				mm.getMainHelper().updateEmuValues();
 
 				View emuView = mm.getEmuView();
@@ -1071,6 +1080,11 @@ public class Emulator {
 */
 		t.start();
 	}
+
+	public static final String GAME_ROOM_PLAY = "com.beetle.gameroom.PLAY";
+
+	/** Started from Beetle Game Room: leaving the game goes straight back to its list. */
+	public static volatile boolean gameRoomLaunch = false;
 
 	public static int getValue(int key) {
 		return getValue(key, 0);

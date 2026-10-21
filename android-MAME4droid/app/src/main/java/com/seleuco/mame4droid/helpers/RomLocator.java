@@ -72,7 +72,7 @@ public class RomLocator {
     public static int find(MAME4droid mm, String game) {
         if (mm == null || game == null || game.length() == 0) return UNKNOWN;
 
-        boolean usingSaf = mm.getPrefsHelper().getSAF_Uri() != null;
+        boolean usingSaf = mm.getPrefsHelper().getSAF_Uri() != null || DirectFolderHelper.isDirect(mm);
         ArrayList<String> saf = usingSaf ? mm.getSAFHelper().getRomsFileNames() : null;
 
         if (matchesAny(saf, game) || inInternalRoms(mm, game) || fromIntent(mm, game))

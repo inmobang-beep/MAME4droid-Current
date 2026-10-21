@@ -30,9 +30,12 @@
     <string name="opt_keyboard">키보드</string>
 
     <string name="dlg_save_changes">변경 사항을 저장하시겠습니까?</string>
-    <string name="dlg_roms_message">ROM 파일을 어디에 저장했거나 저장하시겠습니까?\n\n기본적으로 비어 있는 내부 폴더가 사용됩니다(단, PC를 사용해 ROM 파일을 직접 그곳에 복사해야 합니다). 외부 저장소에서 ROM 파일이 있는 폴더를 선택할 수도 있으며, MAME4droid가 ROM을 읽을 수 있도록 다음 단계에서 권한을 부여해야 합니다.\n\n또한 외부 저장소 폴더를 선택하면 앱을 제거해도 ROM 파일이 삭제되지 않으며, PC 없이 Android 파일 관리자를 사용해 ROM을 그곳으로 옮길 수 있습니다.</string>
+    <string name="dlg_roms_message">ROM 파일을 어디에 저장했거나 저장하시겠습니까?\n\n기본적으로 비어 있는 내부 폴더가 사용됩니다(단, PC를 사용해 ROM 파일을 직접 그곳에 복사해야 합니다). 외부 저장소에서 ROM 파일이 있는 폴더를 선택할 수도 있으며, MAME4droid가 ROM을 읽을 수 있도록 다음 단계에서 권한을 부여해야 합니다.\n\n또한 외부 저장소 폴더를 선택하면 앱을 제거해도 ROM 파일이 삭제되지 않으며, PC 없이 Android 파일 관리자를 사용해 ROM을 그곳으로 옮길 수 있습니다.\n\n공용 폴더: 가장 쉬운 방법입니다. 기기 저장소의 MAME 폴더(/sdcard/MAME)에 파일 관리자나 USB 로 롬을 그냥 넣으면 됩니다. \"모든 파일 접근\" 권한이 필요합니다.</string>
     <string name="dlg_roms_internal">내부</string>
     <string name="dlg_roms_external">외부 저장소</string>
+    <string name="dlg_roms_shared">공용 폴더</string>
+    <string name="dlg_shared_denied">\"모든 파일 접근\" 권한이 없으면 공용 MAME 폴더를 읽을 수 없습니다. 다시 골라 주세요.</string>
+    <string name="dlg_shared_no_settings">이 기기에는 \"모든 파일 접근\" 을 허용하는 화면이 없습니다. PC 에서 아래 명령으로 허용한 뒤 다시 \"공용 폴더\" 를 고르세요.\n\nadb shell appops set %1$s MANAGE_EXTERNAL_STORAGE allow</string>
     <string name="dlg_no_doc_picker">기기에 외부 저장소 읽기를 승인하는 데 필요한 Android 기본 파일 관리자가 없습니다.</string>
     <string name="dlg_no_doc_picker_tv">\n\n일부 Android TV 기기에는 Android 11 이상에서 앱에 폴더 권한을 부여하는 데 필요한 OS 문서 선택기가 없습니다. 대안으로 모든 기기에서 지원되며 Android/media/[앱 패키지 이름]에 생성되는 앱 미디어 폴더를 사용하는 기본값을 선택하세요. 파일 관리자로 에뮬레이터 파일을 해당 폴더로 옮기면 앱이 특별한 권한 없이 접근할 수 있습니다.</string>
     <string name="dlg_exit_message">앱을 종료하시겠습니까?</string>

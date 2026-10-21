@@ -136,6 +136,7 @@ public class MainHelper {
 	protected int oldState = -1;
 
     final public static int REQUEST_CODE_OPEN_DIRECTORY = 33;
+    final public static int REQUEST_CODE_ALL_FILES = 34;
 
     public int getDeviceDetected() {
         return deviceDetected;
@@ -506,7 +507,7 @@ public class MainHelper {
 			prefsHelper.getOSDResolution());
 
 		Emulator.setValue(Emulator.WARN_ON_EXIT,
-			prefsHelper.isWarnOnExit() ? 1 : 0);
+			prefsHelper.isWarnOnExit() && !Emulator.gameRoomLaunch ? 1 : 0);
 
         Emulator.setValue(Emulator.PXASP1, mm.getPrefsHelper()
                 .isPlayerXasPlayer1() ? 1 : 0);
@@ -832,6 +833,11 @@ galaxy sde	   --> 2560x1600 16:10
 
 
     public void activityResult(int requestCode, int resultCode, Intent intent) {
+        if (requestCode == REQUEST_CODE_ALL_FILES) {
+            DirectFolderHelper.permissionResult(mm);
+            return;
+        }
+
 
         if (requestCode == SUBACTIVITY_USER_PREFS) {
 			final View frame = mm.findViewById(R.id.EmulatorFrame); // (O la vista raíz que tengas)

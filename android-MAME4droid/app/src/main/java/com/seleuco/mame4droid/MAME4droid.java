@@ -70,6 +70,8 @@ import com.seleuco.mame4droid.helpers.NetPlayHelper;
 import com.seleuco.mame4droid.helpers.PrefsHelper;
 import com.seleuco.mame4droid.helpers.SAFHelper;
 import com.seleuco.mame4droid.helpers.ScraperHelper;
+import com.seleuco.mame4droid.helpers.DirectFolderHelper;
+import com.seleuco.mame4droid.input.BeetleLink;
 import com.seleuco.mame4droid.input.ControlCustomizer;
 import com.seleuco.mame4droid.input.GameController;
 import com.seleuco.mame4droid.input.InputHandler;
@@ -162,13 +164,14 @@ public class MAME4droid extends Activity {
 
 		mainHelper = new MainHelper(this);
 
-		safHelper = new SAFHelper(this);
+		safHelper = new DirectFolderHelper(this);
 
 		scraperHelper = new ScraperHelper(this);
 		NetPlayHelper = new NetPlayHelper(this);
 		adpfHelper = new AdpfHelper(this);
 
 		inputHandler = new InputHandler(this);
+		BeetleLink.start(this);
 
 		mainHelper.detectDevice();
 
@@ -207,6 +210,8 @@ public class MAME4droid extends Activity {
 					else
 					   showDialog(DialogHelper.DIALOG_ROMs);
 				}
+			} else if (DirectFolderHelper.isDirect(this) && !DirectFolderHelper.hasAccess(this)) {
+				DirectFolderHelper.useSharedFolder(this);
 			} else { //roms dir no es null es que previamente hemos puesto "" o un path especifico. Venimos del recreate y si ha cambiado el installation path hay que actuzalizarlo
 
 				boolean res = getMainHelper().ensureInstallationDIR(mainHelper.getInstallationDIR());
@@ -323,6 +328,7 @@ public class MAME4droid extends Activity {
 	protected void onResume() {
 		Log.d("EMULATOR", "onResume " + this);
 		super.onResume();
+		BeetleLink.setForeground(true);
 
 		if (prefsHelper != null)
 			prefsHelper.resume();
@@ -353,6 +359,7 @@ public class MAME4droid extends Activity {
 	@Override
 	protected void onPause() {
 		Log.d("EMULATOR", "onPause " + this);
+		BeetleLink.setForeground(false);
 		super.onPause();
 		if (prefsHelper != null)
 			prefsHelper.pause();
@@ -501,6 +508,9 @@ public class MAME4droid extends Activity {
 					System.out.println("***3");
 					this.showDialog(DialogHelper.DIALOG_NO_PERMISSIONS);
 				}
+				break;
+			case MainHelper.REQUEST_CODE_ALL_FILES: // shared ROMs folder, legacy storage
+				DirectFolderHelper.permissionResult(this);
 				break;
 			case 43: // NetPlayHelper.REQ_LOCAL_NETWORK (LNP, Android 17): proceed either way
 				if (NetPlayHelper != null)

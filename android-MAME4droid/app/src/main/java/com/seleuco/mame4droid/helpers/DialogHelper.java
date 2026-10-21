@@ -58,6 +58,7 @@ import com.seleuco.mame4droid.Emulator;
 import com.seleuco.mame4droid.MAME4droid;
 import com.seleuco.mame4droid.R;
 import com.seleuco.mame4droid.input.ControlCustomizer;
+import com.seleuco.mame4droid.input.BeetleLink;
 import com.seleuco.mame4droid.input.GameController;
 import com.seleuco.mame4droid.views.IEmuView;
 
@@ -164,6 +165,11 @@ public class DialogHelper {
 								mm.startActivityForResult(intent, MainHelper.REQUEST_CODE_OPEN_DIRECTORY);
 								//throw new ActivityNotFoundException("TEST");
 							} catch (ActivityNotFoundException e) {
+								// No document picker (car head units): the shared folder needs none
+								if (!mm.getMainHelper().isAndroidTV()) {
+									DirectFolderHelper.useSharedFolder(mm);
+									return;
+								}
 
 								String msg = mm.getString(R.string.dlg_no_doc_picker);
 								if (mm.getMainHelper().isAndroidTV())
@@ -177,6 +183,13 @@ public class DialogHelper {
 										}
 									});
 							}
+						}
+					})
+					.setNeutralButton(mm.getString(R.string.dlg_roms_shared), new DialogInterface.OnClickListener() {
+						public void onClick(DialogInterface dialog, int id) {
+							DialogHelper.savedDialog = DIALOG_NONE;
+							mm.removeDialog(DIALOG_ROMs);
+							DirectFolderHelper.useSharedFolder(mm);
 						}
 					});
 
@@ -339,6 +352,7 @@ public class DialogHelper {
 				dialog.setOnKeyListener(new DialogInterface.OnKeyListener() {
 					@Override
 					public boolean onKey(DialogInterface d, int keyCode, KeyEvent event) {
+						if (BeetleLink.isShadowed(event.getDevice())) return true;
 						if (!GameController.isOptionKey(event)) return false;
 						if (event.getAction() == KeyEvent.ACTION_UP) d.cancel();
 						return true;

@@ -36,9 +36,12 @@
 
     <!-- DialogHelper -->
     <string name="dlg_save_changes">Do you want to save changes?</string>
-    <string name="dlg_roms_message">Where do you have stored or want to store your ROM files?\n\nBy default, an empty internal folder will be used (but you should manually copy your ROMs files there using a PC). You can also select a folder with ROMs files from your external storage which will need to be authorized in the next step so MAME4droid can read the ROMS from it.\n\nAlso, if you select an external storage folder, your ROMs files will not be deleted when the app is uninstalled and you can use an Android file manager to move your ROMs there without needing a PC.</string>
+    <string name="dlg_roms_message">Where do you have stored or want to store your ROM files?\n\nBy default, an empty internal folder will be used (but you should manually copy your ROMs files there using a PC). You can also select a folder with ROMs files from your external storage which will need to be authorized in the next step so MAME4droid can read the ROMS from it.\n\nAlso, if you select an external storage folder, your ROMs files will not be deleted when the app is uninstalled and you can use an Android file manager to move your ROMs there without needing a PC.\n\nShared folder: the easiest. ROMs go straight into the MAME folder on the device storage (/sdcard/MAME) with any file manager or a USB stick. Needs \"All files access\".</string>
     <string name="dlg_roms_internal">Internal</string>
     <string name="dlg_roms_external">External Storage</string>
+    <string name="dlg_roms_shared">Shared folder</string>
+    <string name="dlg_shared_denied">Without \"All files access\" MAME4droid cannot read the shared MAME folder. Pick an option again.</string>
+    <string name="dlg_shared_no_settings">This device has no screen to allow \"All files access\". Grant it from a PC with:\n\nadb shell appops set %1$s MANAGE_EXTERNAL_STORAGE allow\n\nthen pick \"Shared folder\" again.</string>
     <string name="dlg_no_doc_picker">Your device doesn\'t have the native android file manager needed to authorize external storage reading.</string>
     <string name="dlg_no_doc_picker_tv">\n\nSome Android TV devices don\'t include the OS document picker which is needed to grant folder permissions for the apps on Android 11+. As an alternative, select default which use the App Media Folder which is supported on all devices and is created at Android/media/[app package name]. Move any emulator files into that folder with a file manager so the app can access them without any special permissions.</string>
     <string name="dlg_exit_message">Are you sure you want to exit from app?</string>

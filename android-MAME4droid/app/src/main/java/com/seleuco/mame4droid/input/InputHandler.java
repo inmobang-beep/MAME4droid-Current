@@ -160,6 +160,10 @@ public class InputHandler implements OnTouchListener, OnKeyListener {
 			return true;
 		}
 
+		// Beetle Pad's virtual pad while its direct link already drives player 1
+		if (BeetleLink.isShadowed(event.getDevice()))
+			return true;
+
 		// 1. Give priority to gamepads and arcade sticks
 		if(gameController.handleGameController(keyCode,event,digital_data))
 			return true;
@@ -306,12 +310,14 @@ public class InputHandler implements OnTouchListener, OnKeyListener {
 	public boolean isHideTouchController() {
 		// Hide virtual pad if physical hardware (keyboard, gamepad, or mouse) is actively taking over
 		return (keyboard.isKeyboardEnabled() && mm.getPrefsHelper().isKeyboardHideController()) ||
-			gameController.isEnabled() ||
+			gameController.isEnabled() || BeetleLink.isConnected() ||
 			(mouse.isEnabled() && Emulator.isInGameButNotInMenu());
 	}
 
 	public boolean genericMotion(MotionEvent event) {
 		// Route analog stick / trigger movements to the gamepad handler
+		if (BeetleLink.isShadowed(event.getDevice()))
+			return true;
 		return gameController.genericMotion(event, digital_data);
 	}
 

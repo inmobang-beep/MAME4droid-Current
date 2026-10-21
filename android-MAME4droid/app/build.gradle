@@ -19,7 +19,9 @@ android {
     defaultConfig {
         applicationId "com.seleuco.mame4d2024"
         minSdkVersion 29
-        targetSdkVersion 37
+        // -PlegacyStorage: target 29 so the shared ROMs folder needs only the ordinary storage
+        // permission popup (head units without the all-files access settings screen)
+        targetSdkVersion project.hasProperty('legacyStorage') ? 29 : 37
         versionCode 145
         versionName '1.41.2'
 
@@ -75,9 +77,12 @@ android {
 		}
     }
 
-    externalNativeBuild {
-        ndkBuild {
-            path file('src/main/jni/Android.mk')
+    // -PprebuiltLibs: package the .so files already in src/main/jniLibs instead of running ndk-build
+    if (!project.hasProperty('prebuiltLibs')) {
+        externalNativeBuild {
+            ndkBuild {
+                path file('src/main/jni/Android.mk')
+            }
         }
     }
 

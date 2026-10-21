@@ -12,6 +12,10 @@
 	     granted. Internet/mobile play is exempt. Requested in context when the
 	     user creates/joins a game; harmless (ignored) on older Android. -->
 	<uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK"/>
+	<!-- Shared ROMs folder (/sdcard/MAME) read without a document picker -->
+	<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
+	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <supports-screens
           android:largeScreens="true"
           android:normalScreens="true"
@@ -63,6 +67,12 @@
 				<category android:name="android.intent.category.LAUNCHER"/>
 				<category android:name="android.intent.category.LEANBACK_LAUNCHER" />
 			</intent-filter>
+
+            <!-- Beetle Game Room: start a game by set name (extra "game") -->
+            <intent-filter>
+                <action android:name="com.beetle.gameroom.PLAY" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
 
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
