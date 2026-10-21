@@ -57,6 +57,12 @@ class RoomView(context: Context) : View(context) {
 
         // header controls
         private val MODE_BTN = RectF(1560f, 44f, 1824f, 100f)
+        private val EXIT_BTN = RectF(1384f, 44f, 1540f, 100f)
+
+        // exit confirmation
+        private val ASK = RectF(660f, 380f, 1260f, 700f)
+        private val ASK_YES = RectF(700f, 590f, 950f, 660f)
+        private val ASK_NO = RectF(970f, 590f, 1220f, 660f)
         private val FILTER_BTN = RectF(90f, 86f, 760f, 130f)
 
         // filter menu
@@ -73,6 +79,13 @@ class RoomView(context: Context) : View(context) {
     var onOpenMenu: (() -> Unit)? = null
     var onPickFilter: ((Int) -> Unit)? = null
     var onCloseMenu: (() -> Unit)? = null
+    var onExit: (() -> Unit)? = null
+
+    /** «Quit?» on screen; [askYes] is the highlighted answer. */
+    var asking = false
+        set(v) { field = v; askYes = false; invalidate() }
+    var askYes = false
+        set(v) { field = v; invalidate() }
 
     var mode = Mode.LIST
         set(v) { field = v; clampTop(); invalidate() }
@@ -208,11 +221,13 @@ class RoomView(context: Context) : View(context) {
         label(c, "BEETLE GAME ROOM", 96f, 72f, 26f, ACCENT, bold, spacing = 0.12f)
         label(c, "거르기 · $filterLabel  ▾", 96f, 116f, 28f, MUTED, semi)
         pill(c, MODE_BTN, if (mode == Mode.LIST) "▦  타일로 보기" else "☰  목록으로 보기")
+        pill(c, EXIT_BTN, "✕  종료")
 
         if (mode == Mode.LIST) drawList(c) else drawTiles(c)
 
-        label(c, "A 실행   X 보기 바꾸기   SELECT 거르기   LB·RB 빨리 거르기   Y 즐겨찾기", 96f, 1046f, 22f, FAINT, regular)
+        label(c, "A 실행   X 보기 바꾸기   SELECT 거르기   LB·RB 빨리 거르기   Y 즐겨찾기   B 종료", 96f, 1046f, 22f, FAINT, regular)
         menu?.let { drawMenu(c, it) }
+        if (asking) drawAsk(c)
         c.restore()
     }
 
@@ -305,6 +320,22 @@ class RoomView(context: Context) : View(context) {
         label(c, "A 고르기   B 닫기", MENU.right - 40, MENU.bottom - 26, 22f, FAINT, regular, right = true)
     }
 
+    private fun drawAsk(c: Canvas) {
+        fill.color = Color.BLACK; fill.alpha = 150
+        c.drawRect(0f, 0f, W, H, fill)
+        fill.color = NAVY; fill.alpha = 245
+        c.drawRoundRect(ASK, 28f, 28f, fill)
+        stroke.color = ACCENT; stroke.alpha = 120; stroke.strokeWidth = 2f
+        c.drawRoundRect(ASK, 28f, 28f, stroke)
+        label(c, "Beetle Game Room 을 끝낼까요?", ASK.centerX(), ASK.top + 110, 36f, INK, bold, center = true)
+        for ((r, yes) in listOf(ASK_YES to true, ASK_NO to false)) {
+            val sel = askYes == yes
+            fill.color = if (sel) ACCENT else Color.WHITE; fill.alpha = if (sel) 235 else 26
+            c.drawRoundRect(r, 22f, 22f, fill)
+            label(c, if (yes) "끝내기" else "계속하기", r.centerX(), r.centerY() + 11f, 30f, if (sel) NAVY else MUTED, bold, center = true)
+        }
+    }
+
     private fun sub(g: Game) = listOf(g.year, g.maker).filter { it.isNotEmpty() }.joinToString(" · ")
 
     /** Screenshot fitted on a dark backdrop, or the genre artwork. */
@@ -385,7 +416,7 @@ class RoomView(context: Context) : View(context) {
         val y = (ev.y - offY) / scale
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> { downX = x; downY = y; dragged = false; dragStartTop = top }
-            MotionEvent.ACTION_MOVE -> if (menu == null) drag(y)
+            MotionEvent.ACTION_MOVE -> if (menu == null && !asking) drag(y)
             MotionEvent.ACTION_UP -> if (!dragged) tap(x, y)
         }
         return true
@@ -410,6 +441,13 @@ class RoomView(context: Context) : View(context) {
     }
 
     private fun tap(x: Float, y: Float) {
+        if (asking) {
+            when {
+                ASK_YES.contains(x, y) -> onExit?.invoke()
+                ASK_NO.contains(x, y) || !ASK.contains(x, y) -> asking = false
+            }
+            return
+        }
         val items = menu
         if (items != null) {
             val inner = menuInner()
@@ -421,6 +459,7 @@ class RoomView(context: Context) : View(context) {
             return
         }
         if (MODE_BTN.contains(x, y)) { onToggleMode?.invoke(); return }
+        if (EXIT_BTN.contains(x, y)) { asking = true; return }
         if (FILTER_BTN.contains(x, y)) { onOpenMenu?.invoke(); return }
         if (mode == Mode.LIST) {
             val inner = listInner()

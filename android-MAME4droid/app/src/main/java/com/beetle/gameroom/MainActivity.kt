@@ -66,6 +66,7 @@ class MainActivity : Activity() {
         room.onOpenMenu = ::openMenu
         room.onPickFilter = ::pickFilter
         room.onCloseMenu = { room.menu = null }
+        room.onExit = ::quit
         setContentView(room)
         filterId = prefs.getString("filter", "all") ?: "all"
         room.mode = if (prefs.getString("mode", "list") == "tiles") RoomView.Mode.TILES else RoomView.Mode.LIST
@@ -186,7 +187,16 @@ class MainActivity : Activity() {
         Log.w(TAG, "start ${g.name}")
     }
 
+    private fun quit() {
+        room.asking = false
+        finishAndRemoveTask()
+    }
+
     private fun direction(button: Int) {
+        if (room.asking) {
+            if (button == PadLink.LEFT || button == PadLink.RIGHT) room.askYes = !room.askYes
+            return
+        }
         val menu = room.menu
         if (menu != null) {
             when (button) {
@@ -214,6 +224,13 @@ class MainActivity : Activity() {
                 return
             }
         }
+        if (room.asking) {
+            when (button) {
+                PadLink.A, PadLink.START -> if (room.askYes) quit() else room.asking = false
+                PadLink.B, PadLink.BACK, PadLink.GUIDE -> room.asking = false
+            }
+            return
+        }
         if (room.menu != null) {
             when (button) {
                 PadLink.A, PadLink.START -> pickFilter(room.menuSel)
@@ -228,6 +245,7 @@ class MainActivity : Activity() {
             PadLink.BACK -> openMenu()
             PadLink.LB -> stepFilter(-1)
             PadLink.RB -> stepFilter(1)
+            PadLink.B -> room.asking = true
         }
     }
 
@@ -260,7 +278,14 @@ class MainActivity : Activity() {
         pad.connected && (event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK))
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK && room.menu != null) { room.menu = null; return true }
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            when {
+                room.asking -> room.asking = false
+                room.menu != null -> room.menu = null
+                else -> room.asking = true
+            }
+            return true
+        }
         if (fromLinkedPad(event)) return true
         val b = keyButton(keyCode)
         if (b < 0) return super.onKeyDown(keyCode, event)
