@@ -389,6 +389,10 @@ public class MainHelper {
                 //msg += "\n\nTIP: You can enable a setting to store save states under roms folder, so they will not be deleted when uninstalling MAME4droid. Look at MAME4droid option in settings.";
             mm.getDialogHelper().setInfoMsg(msg);
 
+			// Beetle Game Room: the game was asked for, no first-run notice in its way
+			if (Emulator.GAME_ROOM_PLAY.equals(mm.getIntent().getAction()))
+				return;
+
 			mm.runOnUiThread(new Runnable() {
 				public void run() {
 					try {

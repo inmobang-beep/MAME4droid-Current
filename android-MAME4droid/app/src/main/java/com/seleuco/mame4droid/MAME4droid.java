@@ -198,6 +198,11 @@ public class MAME4droid extends Activity {
 		if (!Emulator.isEmulating()) {
 
 			if (getPrefsHelper().getInstallationDIR() == null || prefsHelper.getROMsDIR() == null) {
+				// Beetle Game Room: ROMs always live in the shared folder, no question
+				if (Emulator.GAME_ROOM_PLAY.equals(getIntent().getAction())) {
+					DirectFolderHelper.useSharedFolder(this);
+					return;
+				}
 				if (DialogHelper.savedDialog == DialogHelper.DIALOG_NONE) {
 					if(getMainHelper().isAndroidTV() && getPrefsHelper().getInstallationDIR() == null ) {
 						getMainHelper().setInstallationDirType(MainHelper.INSTALLATION_DIR_MEDIA_FOLDER);

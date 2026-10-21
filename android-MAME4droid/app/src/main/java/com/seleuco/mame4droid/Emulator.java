@@ -1063,7 +1063,11 @@ public class Emulator {
 				}
 				mm.runOnUiThread(new Runnable() {
 					public void run() {
-						mm.finishAndRemoveTask();
+						// from Beetle Game Room: close just the game (the list shares the task)
+						if (gameRoomLaunch)
+							mm.finish();
+						else
+							mm.finishAndRemoveTask();
 						android.os.Process.killProcess(android.os.Process.myPid());
 					}
 				});

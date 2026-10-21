@@ -1,4 +1,5 @@
 apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
 
 android {
     compileSdk = 37
@@ -15,9 +16,11 @@ android {
 		sourceCompatibility = JavaVersion.VERSION_17
 		targetCompatibility = JavaVersion.VERSION_17
 	}
+	kotlinOptions { jvmTarget = "17" }
 
     defaultConfig {
-        applicationId "com.seleuco.mame4d2024"
+        // Beetle Game Room: own package, installs next to the official MAME4droid
+        applicationId "com.beetle.gameroom"
         minSdkVersion 29
         // -PlegacyStorage: target 29 so the shared ROMs folder needs only the ordinary storage
         // permission popup (head units without the all-files access settings screen)
