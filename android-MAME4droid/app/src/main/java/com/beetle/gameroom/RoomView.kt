@@ -97,6 +97,19 @@ class RoomView(context: Context) : View(context) {
     var message: String? = null
     var snapDir: File? = null
 
+    /**
+     * Pixels kept clear at the bottom. BYD head units keep their climate strip
+     * (about 90 px at 1080p) over every app, immersive or not.
+     */
+    private val bydStrip = listOf(android.os.Build.MANUFACTURER, android.os.Build.BRAND)
+        .any { it.contains("byd", ignoreCase = true) }
+    private fun bottomPad(): Float {
+        @Suppress("DEPRECATION")
+        val inset = rootWindowInsets?.systemWindowInsetBottom ?: 0
+        val strip = if (bydStrip) height * 90f / 1080f else 0f
+        return max(inset.toFloat(), strip)
+    }
+
     /** Filter menu: labels with counts; null when closed. */
     var menu: List<String>? = null
         set(v) { field = v; invalidate() }
@@ -209,14 +222,16 @@ class RoomView(context: Context) : View(context) {
     private var offY = 0f
 
     override fun onDraw(c: Canvas) {
-        scale = min(width / W, height / H)
+        // the background fills the whole screen, the rest stays clear of the bottom strip
+        c.drawColor(NAVY)
+        bg?.let { c.drawBitmap(it, null, RectF(0f, 0f, width.toFloat(), height.toFloat()), bmp) }
+        val usable = height - bottomPad()
+        scale = min(width / W, usable / H)
         offX = (width - W * scale) / 2f
-        offY = (height - H * scale) / 2f
+        offY = (usable - H * scale) / 2f
         c.save()
         c.translate(offX, offY)
         c.scale(scale, scale)
-        c.drawColor(NAVY)
-        bg?.let { c.drawBitmap(it, null, RectF(0f, 0f, W, H), bmp) }
 
         label(c, "BEETLE GAME ROOM", 96f, 72f, 26f, ACCENT, bold, spacing = 0.12f)
         label(c, "거르기 · $filterLabel  ▾", 96f, 116f, 28f, MUTED, semi)
