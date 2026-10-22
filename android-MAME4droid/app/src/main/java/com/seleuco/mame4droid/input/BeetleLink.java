@@ -176,16 +176,12 @@ public final class BeetleLink implements Runnable {
 			return;
 		}
 
-		// Same layout as the Xbox profile in GameController (A/B swapped for arcade order)
+		// 패드 A B X Y RB LB LT RT → 게임 버튼([loadLayout], 게임룸에서 게임마다 정한 배치)
 		int m = 0;
-		if (on(btn, A)) m |= IController.BTN2_VALUE;
-		if (on(btn, B)) m |= IController.BTN1_VALUE;
-		if (on(btn, X)) m |= IController.BTN3_VALUE;
-		if (on(btn, Y)) m |= IController.BTN4_VALUE;
-		if (on(btn, RB)) m |= IController.BTN5_VALUE;
-		if (on(btn, LB)) m |= IController.BTN6_VALUE;
-		if (lt) m |= IController.BTN7_VALUE;
-		if (rt) m |= IController.BTN8_VALUE;
+		boolean[] pad = {on(btn, A), on(btn, B), on(btn, X), on(btn, Y), on(btn, RB), on(btn, LB), lt, rt};
+		int[] l = layout;
+		for (int i = 0; i < pad.length; i++)
+			if (pad[i] && l[i] >= 1 && l[i] <= 8) m |= GAME_BTN[l[i]];
 		if (on(btn, START) || on(btn, L3)) m |= IController.START_VALUE;
 		if (on(btn, BACK) || on(btn, R3)) m |= IController.COIN_VALUE;
 		// D-pad plus the left stick as directions (most arcade games are digital)
@@ -213,6 +209,35 @@ public final class BeetleLink implements Runnable {
 			Emulator.setInOptions(true);
 			m.showDialog(DialogHelper.DIALOG_OPTIONS);
 		});
+	}
+
+	/** 패드 A B X Y RB LB LT RT → 게임 버튼 1~8(0 = 없음). 기본은 GameController 의 엑스박스 배치와 같다. */
+	private static final int[] DEFAULT_LAYOUT = {2, 1, 3, 4, 5, 6, 7, 8};
+	private static final String[] PAD_NAMES = {"A", "B", "X", "Y", "RB", "LB", "LT", "RT"};
+	private static final int[] GAME_BTN = {0, IController.BTN1_VALUE, IController.BTN2_VALUE, IController.BTN3_VALUE,
+		IController.BTN4_VALUE, IController.BTN5_VALUE, IController.BTN6_VALUE, IController.BTN7_VALUE, IController.BTN8_VALUE};
+	private static volatile int[] layout = DEFAULT_LAYOUT;
+
+	/** 게임룸이 정해 둔 그 게임의 배치(files/buttons/<세트>.txt), 없으면 기본. */
+	public static void loadLayout(android.content.Context ctx, String game) {
+		int[] l = DEFAULT_LAYOUT.clone();
+		java.io.File f = game == null ? null : new java.io.File(ctx.getFilesDir(), "buttons/" + game + ".txt");
+		if (f != null && f.isFile()) {
+			try {
+				String text = new String(java.nio.file.Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+				for (String part : text.trim().split("\\s+")) {
+					String[] kv = part.split("=");
+					if (kv.length != 2) continue;
+					for (int i = 0; i < PAD_NAMES.length; i++)
+						if (PAD_NAMES[i].equals(kv[0])) {
+							int n = Integer.parseInt(kv[1].trim());
+							if (n >= 0 && n <= 8) l[i] = n;
+						}
+				}
+				Log.w(TAG, "buttons for " + game + ": " + text.trim());
+			} catch (Exception e) { Log.w(TAG, "buttons " + f + ": " + e); }
+		}
+		layout = l;
 	}
 
 	private static void exitGame() {

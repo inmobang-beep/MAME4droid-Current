@@ -16,6 +16,8 @@ data class Game(
     val rotation: String,
     /** Files this game needs that are not in the ROM folder (BIOS, original set), e.g. "neogeo.zip". */
     val missing: List<String> = emptyList(),
+    /** 게임이 쓰는 버튼 수(목록의 «Buttons»), 모르면 0. */
+    val buttons: Int = 0,
 ) {
     val genre: Genre get() = Genre.of(category)
     val yearNum: Int get() = year.take(4).filter { it.isDigit() }.toIntOrNull() ?: 0
@@ -86,7 +88,7 @@ object RomList {
             .filter { it.size >= 2 && it[0].isNotBlank() }
             .map { p ->
                 fun f(i: Int) = p.getOrNull(i)?.trim().orEmpty()
-                Game(f(0), f(1).ifEmpty { f(0) }, f(4), f(5), f(6), f(7), f(8))
+                Game(f(0), f(1).ifEmpty { f(0) }, f(4), f(5), f(6), f(7), f(8), buttons = f(16).toIntOrNull() ?: 0)
             }
             .filterNot { it.category.contains("adult", true) }
             .distinctBy { it.name }

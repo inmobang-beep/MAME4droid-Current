@@ -78,6 +78,9 @@ class RoomView(context: Context) : View(context) {
         private val DEL_YES = RectF(970f, 770f, 1220f, 840f)
     }
 
+    /** 한 게임의 버튼 설정: [sel] 0~7 패드 버튼, 8 «격투 6버튼», 9 «기본값으로». */
+    class Pads(val game: Game, val layout: IntArray) { var sel = 0 }
+
     /** «게임룸 삭제» on screen. [sel]: 0 the games tick box, 1 cancel, 2 delete. */
     class Removal {
         var sel = 1
@@ -103,6 +106,14 @@ class RoomView(context: Context) : View(context) {
     var onOpenSettings: (() -> Unit)? = null
     var onRemove: (() -> Unit)? = null
     var onCloseRemoval: (() -> Unit)? = null
+    var onLongPress: ((Game) -> Unit)? = null
+    var onPadsChanged: (() -> Unit)? = null
+    var onClosePads: (() -> Unit)? = null
+    /** 화면에 뜬 버튼 설정 창(없으면 null). */
+    var pads: Pads? = null
+        set(v) { field = v; invalidate() }
+    /** 오락실 방은 게임마다 버튼 설정이 있다(A 꾹 누르기, 길게 터치). */
+    var holdForButtons = false
 
     /** Main menu: which machine to play (0 arcade/MAME, 1 PSP). */
     var hub = false
@@ -313,8 +324,10 @@ class RoomView(context: Context) : View(context) {
             Mode.TILES -> drawTiles(c)
         }
 
-        label(c, "A 실행   X 보기 바꾸기   SELECT 거르기   LB·RB 빨리 거르기   Y 즐겨찾기   B 메인 메뉴", 96f, 1046f, 22f, FAINT, regular)
+        label(c, (if (holdForButtons) "A 실행 (꾹 누르면 버튼 설정)" else "A 실행") +
+            "   X 보기 바꾸기   SELECT 거르기   LB·RB 빨리 거르기   Y 즐겨찾기   B 메인 메뉴", 96f, 1046f, 22f, FAINT, regular)
         menu?.let { drawMenu(c, it) }
+        pads?.let { drawPads(c, it) }
         if (asking) drawAsk(c)
         c.restore()
     }
@@ -570,6 +583,66 @@ class RoomView(context: Context) : View(context) {
         }
     }
 
+    private fun drawPads(c: Canvas, p: Pads) {
+        dim(c, 150)
+        fill.color = NAVY; fill.alpha = 245
+        c.drawRoundRect(MENU, 28f, 28f, fill)
+        stroke.color = ACCENT; stroke.alpha = 120; stroke.strokeWidth = 2f
+        c.drawRoundRect(MENU, 28f, 28f, stroke)
+        label(c, "버튼 설정", MENU.left + 40, MENU.top + 62, 36f, ACCENT, bold)
+        label(c, p.game.title + if (p.game.buttons > 0) "  ·  버튼 ${p.game.buttons}개" else "",
+            MENU.left + 40, MENU.top + 104, 24f, MUTED, regular, maxW = MENU.width() - 80)
+        val top = MENU.top + 136
+        val rowH = 66f
+        for (i in 0..9) {
+            val r = RectF(MENU.left + 28, top + i * rowH, MENU.right - 28, top + (i + 1) * rowH)
+            val sel = i == p.sel
+            if (sel) { fill.color = ACCENT; fill.alpha = 235; c.drawRoundRect(RectF(r.left, r.top + 4, r.right, r.bottom - 4), 12f, 12f, fill) }
+            val ink = if (sel) NAVY else INK
+            if (i >= 8) {
+                label(c, if (i == 8) "격투 6버튼" else "기본값으로", r.left + 24, r.centerY() + 11f, 30f, ink, if (sel) bold else semi)
+                continue
+            }
+            label(c, ButtonLayout.PADS[i], r.left + 24, r.centerY() + 11f, 30f, ink, bold)
+            val v = p.layout[i]
+            val unused = v == 0 || (p.game.buttons in 1 until v)
+            label(c, if (v == 0) "없음" else "버튼 $v", r.right - 72, r.centerY() + 11f, 30f,
+                if (sel) NAVY else if (unused) FAINT else INK, if (sel) bold else semi, right = true)
+            if (sel) label(c, "‹  ›", r.right - 24, r.centerY() + 11f, 26f, NAVY, bold, right = true)
+        }
+        label(c, "↑↓ 고르기   ←→ 바꾸기   B 닫기", MENU.right - 40, MENU.bottom - 26, 22f, FAINT, regular, right = true)
+    }
+
+    private fun padsRow(y: Float): Int = ((y - (MENU.top + 136)) / 66f).toInt().takeIf { y >= MENU.top + 136 && it in 0..9 } ?: -1
+
+    /** 손가락 아래 게임의 번호(없으면 -1). */
+    private fun gameAt(x: Float, y: Float): Int {
+        if (games.isEmpty()) return -1
+        return when (mode) {
+            Mode.ORBIT -> if (y in 140f..720f && abs(x - Orbit.CX) < Orbit.CARD_W / 2) selected else -1
+            Mode.LIST -> {
+                val inner = listInner()
+                when {
+                    inner.contains(x, y) -> (top + ((y - inner.top) / (inner.height() / ROWS)).toInt()).takeIf { it in games.indices } ?: -1
+                    CARD.contains(x, y) -> selected
+                    else -> -1
+                }
+            }
+            Mode.TILES -> (0 until COLS * TILE_ROWS).firstOrNull { tileRect(it).contains(x, y) }?.let { top + it }?.takeIf { it in games.indices } ?: -1
+        }
+    }
+
+    private var longFired = false
+    private val longPress = Runnable {
+        if (dragged || !holdForButtons) return@Runnable
+        val i = gameAt(downX, downY)
+        if (i < 0) return@Runnable
+        longFired = true
+        selected = i
+        games.getOrNull(i)?.let { onLongPress?.invoke(it) }
+        invalidate()
+    }
+
     /** Darkens the whole view, also outside the design area (letterbox, bottom strip). */
     private fun dim(c: Canvas, alpha: Int) {
         fill.color = Color.BLACK; fill.alpha = alpha
@@ -657,12 +730,22 @@ class RoomView(context: Context) : View(context) {
         val x = (ev.x - offX) / scale
         val y = (ev.y - offY) / scale
         when (ev.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { downX = x; downY = y; dragged = false; dragStartTop = top; dragStartTarget = orbit.target; orbit.poke() }
-            MotionEvent.ACTION_MOVE -> if (menu == null && removal == null && !asking && !hub) {
-                if (mode == Mode.ORBIT) spin(x, y) else drag(y)
+            MotionEvent.ACTION_DOWN -> {
+                downX = x; downY = y; dragged = false; dragStartTop = top; dragStartTarget = orbit.target; orbit.poke()
+                longFired = false
+                if (!hub && menu == null && pads == null && removal == null && !asking) postDelayed(longPress, 600)
             }
-            MotionEvent.ACTION_UP -> if (!dragged) tap(x, y) else if (mode == Mode.ORBIT && games.isNotEmpty()) {
-                selected = orbit.settle(games.size); invalidate()
+            MotionEvent.ACTION_MOVE -> if (menu == null && pads == null && removal == null && !asking && !hub) {
+                if (mode == Mode.ORBIT) spin(x, y) else drag(y)
+                if (dragged || abs(x - downX) > 24 || abs(y - downY) > 24) removeCallbacks(longPress)
+            }
+            MotionEvent.ACTION_CANCEL -> removeCallbacks(longPress)
+            MotionEvent.ACTION_UP -> {
+                removeCallbacks(longPress)
+                // 길게 터치해서 이미 버튼 설정을 열었다
+                if (longFired) longFired = false
+                else if (!dragged) tap(x, y)
+                else if (mode == Mode.ORBIT && games.isNotEmpty()) { selected = orbit.settle(games.size); invalidate() }
             }
         }
         return true
@@ -698,6 +781,14 @@ class RoomView(context: Context) : View(context) {
     }
 
     private fun tap(x: Float, y: Float) {
+        pads?.let { p ->
+            if (!MENU.contains(x, y)) { onClosePads?.invoke(); return }
+            val i = padsRow(y)
+            if (i >= 8) { (if (i == 8) ButtonLayout.FIGHT6 else ButtonLayout.DEFAULT).copyInto(p.layout); p.sel = i }
+            else if (i >= 0) { p.sel = i; p.layout[i] = (p.layout[i] + 1) % 9 }
+            if (i >= 0) { onPadsChanged?.invoke(); invalidate() }
+            return
+        }
         removal?.let { r ->
             if (r.busy) { if (!DEL.contains(x, y)) onCloseRemoval?.invoke(); return }
             if (r.started) return

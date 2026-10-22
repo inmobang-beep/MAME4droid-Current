@@ -84,6 +84,9 @@ class MainActivity : Activity() {
         room.onOpenSettings = ::openSettings
         room.onRemove = ::remove
         room.onCloseRemoval = ::closeRemoval
+        room.onLongPress = ::openPads
+        room.onPadsChanged = ::savePads
+        room.onClosePads = { room.pads = null }
         room.hub = true
         room.hubSel = prefs.getInt("hub", 0)
         setContentView(room)
@@ -152,6 +155,7 @@ class MainActivity : Activity() {
         room.platformLabel = p.label
         room.snapDir = if (p == Platform.PSP) pspCache() else File(mameDir(), "snap")
         room.hub = false
+        room.holdForButtons = p == Platform.MAME
         apply(prefs.getString("game_" + p.name, null))
     }
 
@@ -234,6 +238,25 @@ class MainActivity : Activity() {
         room.menu = null
         apply()
     }
+
+    // ------------------------------------------------------------ 버튼 설정(오락실)
+
+    private fun openPads(g: Game) {
+        if (platform != Platform.MAME) return
+        room.pads = RoomView.Pads(g, ButtonLayout.load(this, g.name))
+    }
+
+    private fun savePads() {
+        val p = room.pads ?: return
+        ButtonLayout.save(this, p.game.name, p.layout)
+    }
+
+    /** 게임에서 A 를 이만큼 누르고 있으면 켜는 대신 버튼 설정을 연다. */
+    private val holdA = Runnable {
+        aDown = false
+        room.current?.let(::openPads)
+    }
+    private var aDown = false
 
     private fun openSettings() {
         settingsMenu = true
@@ -351,6 +374,18 @@ class MainActivity : Activity() {
     }
 
     private fun direction(button: Int) {
+        room.pads?.let { p ->
+            when (button) {
+                PadLink.UP -> p.sel = Math.floorMod(p.sel - 1, 10)
+                PadLink.DOWN -> p.sel = Math.floorMod(p.sel + 1, 10)
+                PadLink.LEFT, PadLink.RIGHT -> if (p.sel < 8) {
+                    p.layout[p.sel] = Math.floorMod(p.layout[p.sel] + if (button == PadLink.RIGHT) 1 else -1, 9)
+                    savePads()
+                }
+            }
+            room.invalidate()
+            return
+        }
         room.removal?.let { r ->
             if (r.busy || r.started) return
             when (button) {
@@ -399,6 +434,20 @@ class MainActivity : Activity() {
                 return
             }
         }
+        room.pads?.let { p ->
+            when (button) {
+                PadLink.A, PadLink.START -> {
+                    when (p.sel) {
+                        8 -> ButtonLayout.FIGHT6.copyInto(p.layout)
+                        9 -> ButtonLayout.DEFAULT.copyInto(p.layout)
+                        else -> p.layout[p.sel] = (p.layout[p.sel] + 1) % 9
+                    }
+                    savePads(); room.invalidate()
+                }
+                PadLink.B, PadLink.BACK, PadLink.GUIDE -> room.pads = null
+            }
+            return
+        }
         room.removal?.let { r ->
             if (button == PadLink.B || button == PadLink.BACK || button == PadLink.GUIDE) { closeRemoval(); return }
             if (r.busy || r.started) return
@@ -434,7 +483,9 @@ class MainActivity : Activity() {
             return
         }
         when (button) {
-            PadLink.A, PadLink.START -> room.current?.let(::launch)
+            // 오락실: A 는 뗄 때 켜고, 꾹 누르고 있으면 그 게임의 버튼 설정을 연다
+            PadLink.A -> if (platform == Platform.MAME) { aDown = true; main.postDelayed(holdA, 600) } else room.current?.let(::launch)
+            PadLink.START -> room.current?.let(::launch)
             PadLink.X -> toggleMode()
             PadLink.Y -> toggleFavourite()
             PadLink.BACK -> openMenu()
@@ -445,6 +496,11 @@ class MainActivity : Activity() {
     }
 
     private fun release(button: Int) {
+        if (button == PadLink.A && aDown) {
+            aDown = false
+            main.removeCallbacks(holdA)
+            if (room.pads == null && room.menu == null && !room.hub && !room.asking && room.removal == null) room.current?.let(::launch)
+        }
         if (button == held) {
             held = -1
             main.removeCallbacks(repeat)
@@ -475,6 +531,7 @@ class MainActivity : Activity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             when {
+                room.pads != null -> room.pads = null
                 room.removal != null -> closeRemoval()
                 room.asking -> room.asking = false
                 room.menu != null -> room.menu = null

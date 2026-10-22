@@ -1043,6 +1043,10 @@ public class Emulator {
 				}
 
 				gameRoomLaunch = gameRoomPlay;
+				// 게임룸이 이 게임에 정해 둔 패드 배치
+				String roomGame = gameRoomPlay ? intent.getStringExtra("game") : null;
+				com.seleuco.mame4droid.input.BeetleLink.loadLayout(mm,
+					roomGame != null && roomGame.matches("[A-Za-z0-9_]+") ? roomGame : null);
 				mm.getMainHelper().updateEmuValues();
 
 				View emuView = mm.getEmuView();
