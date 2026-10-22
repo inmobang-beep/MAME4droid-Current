@@ -16,17 +16,24 @@ class GameRoomApp : Application() {
     companion object {
         private const val TAG = "BeetleGameRoom"
         private const val EVERY = 700L
-        private val GAMES = setOf("com.seleuco.mame4droid.MAME4droid", "org.ppsspp.ppsspp.PpssppActivity")
+        private const val PSP = "org.ppsspp.ppsspp.PpssppActivity"
+        private val GAMES = setOf("com.seleuco.mame4droid.MAME4droid", PSP)
     }
 
     @Volatile private var watching: Activity? = null
 
     override fun onCreate() {
         super.onCreate()
-        if (!Gear.LOCK) return
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
-            override fun onActivityResumed(a: Activity) { if (a.javaClass.name in GAMES) watch(a) }
-            override fun onActivityPaused(a: Activity) { if (watching === a) watching = null }
+            override fun onActivityResumed(a: Activity) {
+                if (Gear.LOCK && a.javaClass.name in GAMES) watch(a)
+                // PSP 는 비틀 패드 직결 창구를 직접 읽는다([PspPadLink])
+                if (a.javaClass.name == PSP) PspPadLink.start()
+            }
+            override fun onActivityPaused(a: Activity) {
+                if (watching === a) watching = null
+                if (a.javaClass.name == PSP) PspPadLink.stop()
+            }
             override fun onActivityCreated(a: Activity, b: Bundle?) {}
             override fun onActivityStarted(a: Activity) {}
             override fun onActivityStopped(a: Activity) {}
