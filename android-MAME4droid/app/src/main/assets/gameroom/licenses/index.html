@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>오픈소스 라이선스</title>
+<style>
+  @font-face { font-family: P; src: url("../fonts/Pretendard-Regular.otf"); }
+  @font-face { font-family: P; font-weight: 700; src: url("../fonts/Pretendard-Bold.otf"); }
+  body { background: #0A1426; color: #F4F7FA; font-family: P, sans-serif; font-size: 20px; line-height: 1.6;
+         margin: 0; padding: 40px 96px 120px; }
+  h1 { color: #4FE3D6; font-size: 34px; margin: 0 0 8px; }
+  h2 { color: #4FE3D6; font-size: 26px; margin: 40px 0 8px; border-top: 1px solid #23324a; padding-top: 24px; }
+  p, li { color: #C9D3DF; }
+  .who { color: #A7B4C4; }
+  a { color: #4FE3D6; }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+  td { padding: 6px 12px 6px 0; vertical-align: top; color: #C9D3DF; border-bottom: 1px solid #1a2840; }
+  td:first-child { color: #F4F7FA; white-space: nowrap; }
+  code { color: #F4F7FA; }
+</style>
+</head>
+<body>
+<h1>오픈소스 라이선스</h1>
+<p>Beetle Game Room 은 아래 오픈소스 프로그램으로 만들었습니다. 이 앱은 GNU 일반 공중 사용 허가서(GPL) 2판 또는 그 뒤의 판에 따라
+누구나 다시 나누고 고칠 수 있으며, 아무런 보증도 하지 않습니다. 게임 롬·바이오스는 들어 있지 않습니다.</p>
+
+<h2>소스 코드</h2>
+<p>이 앱의 전체 소스(우리가 고친 부분 포함)는 아래에서 받을 수 있습니다.</p>
+<ul>
+  <li>Beetle Game Room · MAME4droid 고친 판: <a href="https://github.com/inmobang-beep/MAME4droid-Current/tree/beetle">github.com/inmobang-beep/MAME4droid-Current</a> (<code>beetle</code> 가지)</li>
+  <li>PPSSPP 1.20.4 원본: <a href="https://github.com/hrydgard/ppsspp/releases/tag/v1.20.4">github.com/hrydgard/ppsspp</a> — 우리가 고친 곳은 위 저장소의 <code>android-MAME4droid/ppsspp/ppsspp-1.20.4.patch</code></li>
+  <li>MAME4droid 원본: <a href="https://github.com/seleuco/MAME4droid-Current">github.com/seleuco/MAME4droid-Current</a> · MAME 0.289: <a href="https://github.com/mamedev/mame">github.com/mamedev/mame</a></li>
+</ul>
+
+<h2>Beetle Game Room</h2>
+<p class="who">게임 목록 화면·패드 연결·PSP 연결 등 이 앱에서 더한 부분. GPL 2판 이상.</p>
+
+<h2>MAME4droid (Current)</h2>
+<p class="who">Copyright © 2026 David Valdeita (Seleuco). GPL 2판 이상.</p>
+
+<h2>MAME</h2>
+<p class="who">Copyright © 1997-2026 MAMEDev and contributors. 전체로는 GPL 2판 이상, 일부 파일은 BSD 3조항 라이선스.
+MAME is a registered trademark of Gregory Ember. <a href="MAME-COPYING.txt">MAME 고지 전문</a></p>
+<p>MAME 이 쓰는 외부 라이브러리(각자의 라이선스): zlib(zlib), LZMA SDK(공개), libFLAC(BSD 3조항), libjpeg(IJG),
+expat(MIT), utf8proc(MIT), RapidJSON(MIT), Lua(MIT), SQLite(공개), asio(Boost), bgfx·bx·bimg(BSD 2조항),
+SoftFloat 3(BSD 3조항), zstd(BSD) 등 — 자세한 것은 MAME 소스의 <code>3rdparty</code> 폴더.</p>
+
+<h2>PPSSPP 1.20.4</h2>
+<p class="who">Copyright © 2012- Henrik Rydgård and contributors. GPL 2판 이상. <a href="PPSSPP-LICENSE.txt">PPSSPP 라이선스 전문</a></p>
+<p>PPSSPP 가 쓰는 외부 라이브러리(각자의 라이선스): FFmpeg(LGPL 2.1 이상), libpng(libpng), zlib(zlib), libzip(BSD 3조항),
+libchdr(BSD 3조항), LZMA SDK(공개), zstd(BSD), glslang(BSD 3조항 등), SPIRV-Cross(Apache 2.0),
+basis_universal(Apache 2.0), cpu_features(Apache 2.0), FreeType(FreeType 라이선스), Dear ImGui(MIT), RapidJSON(MIT),
+rcheevos(MIT), miniupnp(BSD 3조항), snappy(BSD 3조항), CityHash(MIT), SFMT(BSD 3조항), armips(MIT), minimp3(CC0),
+Lua(MIT), pugixml(MIT), nanosvg(zlib), libadrenotools(BSD 2조항) 등 — 자세한 것은 PPSSPP 소스의 <code>ext</code> 폴더.</p>
+
+<h2>그 밖의 라이브러리와 글꼴</h2>
+<table>
+  <tr><td>Kotlin 표준 라이브러리</td><td>JetBrains · Apache 2.0</td></tr>
+  <tr><td>AndroidX (appcompat · documentfile)</td><td>Google · Apache 2.0</td></tr>
+  <tr><td>Protocol Buffers (javalite)</td><td>Google · BSD 3조항</td></tr>
+  <tr><td>dadb</td><td>mobile.dev · Apache 2.0</td></tr>
+  <tr><td>HiddenApiBypass</td><td>LSPosed · Apache 2.0</td></tr>
+  <tr><td>Pretendard 글꼴</td><td>Kil Hyung-jin · SIL 오픈 폰트 라이선스 1.1 (<a href="../fonts/OFL.txt">전문</a>)</td></tr>
+</table>
+<p><a href="Apache-2.0.txt">Apache 2.0 라이선스 전문</a></p>
+
+<h2>GNU 일반 공중 사용 허가서 2판</h2>
+<p><a href="GPL-2.0.txt">GPL 2판 전문</a></p>
+</body>
+</html>

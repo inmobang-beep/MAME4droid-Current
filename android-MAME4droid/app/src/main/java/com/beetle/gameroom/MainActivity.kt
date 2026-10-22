@@ -32,7 +32,7 @@ class MainActivity : Activity() {
         private const val REPEAT_EVERY = 70L
         private const val RECENT_MAX = 40
         /** Settings menu rows; «게임룸 삭제» stays the last one. */
-        private val SETTINGS = listOf("게임룸 삭제")
+        private val SETTINGS = listOf("오픈소스 라이선스", "게임룸 삭제")
         private const val CONNECT_WAIT = 60_000L
         private const val REMOVE_WAIT = 20_000L
     }
@@ -232,6 +232,7 @@ class MainActivity : Activity() {
         if (settingsMenu) {
             room.menu = null
             if (i == SETTINGS.lastIndex) room.removal = RoomView.Removal()
+            else if (i == 0) startActivity(android.content.Intent(this, LicenseActivity::class.java))
             return
         }
         filters.getOrNull(i)?.let { filterId = it.first.id }
