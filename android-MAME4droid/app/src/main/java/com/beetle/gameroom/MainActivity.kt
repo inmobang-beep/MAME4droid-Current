@@ -36,10 +36,17 @@ class MainActivity : Activity() {
     private lateinit var room: RoomView
     private val prefs by lazy { getSharedPreferences("room", MODE_PRIVATE) }
     private val main = Handler(Looper.getMainLooper())
-    private var all: List<Game> = emptyList()
+    /** null: the main menu; otherwise the machine whose games are shown. */
+    private enum class Platform(val label: String) { MAME("오락실"), PSP("PSP") }
+    private var platform: Platform? = null
+    private var mameGames: List<Game> = emptyList()
+    private var pspGames: List<Game> = emptyList()
+    private var pspPaths: Map<String, File> = emptyMap()
+    private val all: List<Game> get() = if (platform == Platform.PSP) pspGames else mameGames
     private var filters: List<Pair<Filter, List<Game>>> = emptyList()
     private var filterId = "all"
     private var listStamp = 0L
+    @Volatile private var pspScanning = false
     private var resumed = false
     private var launching = false
 
@@ -67,8 +74,10 @@ class MainActivity : Activity() {
         room.onPickFilter = ::pickFilter
         room.onCloseMenu = { room.menu = null }
         room.onExit = ::quit
+        room.onHubPick = { enter(Platform.entries[it]) }
+        room.hub = true
+        room.hubSel = prefs.getInt("hub", 0)
         setContentView(room)
-        filterId = prefs.getString("filter", "all") ?: "all"
         room.mode = when (prefs.getString("mode", "orbit")) {
             "list" -> RoomView.Mode.LIST
             "tiles" -> RoomView.Mode.TILES
@@ -98,10 +107,7 @@ class MainActivity : Activity() {
         resumed = false
         held = -1
         pad.stop()
-        prefs.edit().putString("filter", filterId)
-            .putString("mode", room.mode.name.lowercase())
-            .apply { room.current?.let { putString("game", it.name) } }
-            .apply()
+        saveState()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -119,20 +125,63 @@ class MainActivity : Activity() {
 
     // ------------------------------------------------------------ data
 
+    private fun saveState() {
+        val e = prefs.edit().putString("mode", room.mode.name.lowercase()).putInt("hub", room.hubSel)
+        platform?.let { p ->
+            e.putString("filter_" + p.name, filterId)
+            room.current?.let { e.putString("game_" + p.name, it.name) }
+        }
+        e.apply()
+    }
+
+    private fun enter(p: Platform) {
+        platform = p
+        room.hubSel = p.ordinal
+        filterId = prefs.getString("filter_" + p.name, "all") ?: "all"
+        room.platformLabel = p.label
+        room.snapDir = if (p == Platform.PSP) pspCache() else File(mameDir(), "snap")
+        room.hub = false
+        apply(prefs.getString("game_" + p.name, null))
+    }
+
+    private fun backToHub() {
+        saveState()
+        platform = null
+        room.menu = null
+        room.hub = true
+    }
+
+    private fun pspCache() = File(cacheDir, "psp")
+    private fun pspDirs() = listOf(File(Environment.getExternalStorageDirectory(), "PSP/GAME"))
+
     private fun mameDir() = File(Environment.getExternalStorageDirectory(), "MAME")
     private fun favourites(): Set<String> = prefs.getStringSet("favourites", emptySet()) ?: emptySet()
     private fun recent(): List<String> = prefs.getString("recent", "")!!.split('\n').filter { it.isNotEmpty() }
 
     private fun reload() {
         val f = File(mameDir(), "BeetleGameRoom.txt")
-        room.snapDir = File(mameDir(), "snap")
         val stamp = if (f.isFile) f.lastModified() else -1L
-        if (stamp != listStamp || all.isEmpty()) {
+        if (stamp != listStamp || mameGames.isEmpty()) {
             listStamp = stamp
-            all = RomList.read(f)
-            Log.w(TAG, "romlist ${f.path}: ${all.size} games")
+            mameGames = RomList.read(f)
+            Log.w(TAG, "romlist ${f.path}: ${mameGames.size} games")
         }
-        apply(prefs.getString("game", null))
+        // PSP discs: titles and pictures come out of the images (cached), off the UI thread
+        if (!pspScanning) {
+            pspScanning = true
+            Thread {
+                val (games, paths) = PspLibrary.scan(pspDirs(), pspCache())
+                main.post {
+                    pspGames = games; pspPaths = paths; pspScanning = false
+                    room.hubCounts = intArrayOf(mameGames.size, pspGames.size)
+                    if (platform == Platform.PSP) apply()
+                    room.invalidate()
+                    Log.w(TAG, "psp: ${games.size} games")
+                }
+            }.start()
+        }
+        room.hubCounts = intArrayOf(mameGames.size, pspGames.size)
+        if (platform != null) apply()
     }
 
     private fun apply(keepName: String? = room.current?.name) {
@@ -141,8 +190,11 @@ class MainActivity : Activity() {
         val (filter, games) = filters.firstOrNull { it.first.id == filterId } ?: filters.first().also { filterId = it.first.id }
         room.favourites = favs
         room.filterLabel = filter.label
-        room.message = if (all.isEmpty())
-            "게임 목록이 없습니다 — 맥의 «게임 관리»에서 «차로 보내기»를 해 주세요" else null
+        room.message = when {
+            all.isNotEmpty() -> null
+            platform == Platform.PSP -> "PSP 게임이 없습니다 — /sdcard/PSP/GAME 에 ISO·CSO 를 넣어 주세요"
+            else -> "게임 목록이 없습니다 — 맥의 «게임 관리»에서 «차로 보내기»를 해 주세요"
+        }
         room.setGames(games, keepName)
     }
 
@@ -184,10 +236,23 @@ class MainActivity : Activity() {
         launching = true
         held = -1
         val recent = listOf(g.name) + recent().filter { it != g.name }
-        prefs.edit().putString("game", g.name).putString("filter", filterId)
-            .putString("recent", recent.take(RECENT_MAX).joinToString("\n")).apply()
-        // the MAME engine of this app, in its own process
-        startActivity(Intent(this, MAME4droid::class.java).setAction(Emulator.GAME_ROOM_PLAY).putExtra("game", g.name))
+        prefs.edit().putString("recent", recent.take(RECENT_MAX).joinToString("\n")).apply()
+        saveState()
+        if (platform == Platform.PSP) {
+            // PPSSPP of this app, in its own process: boots the disc, and «exit» in its pause menu comes back here
+            val disc = pspPaths[g.name] ?: run { launching = false; return }
+            val args = "\"" + disc.path.replace("\\", "\\\\").replace("\"", "\\\"") + "\" --pause-menu-exit"
+            try {
+                startActivity(Intent().setClassName(packageName, "org.ppsspp.ppsspp.PpssppActivity")
+                    .putExtra("org.ppsspp.ppsspp.Args", args))
+            } catch (e: Exception) {
+                launching = false
+                Toast.makeText(this, "PSP 에뮬레이터가 이 판에 없습니다", Toast.LENGTH_LONG).show()
+            }
+        } else {
+            // the MAME engine of this app, in its own process
+            startActivity(Intent(this, MAME4droid::class.java).setAction(Emulator.GAME_ROOM_PLAY).putExtra("game", g.name))
+        }
         Log.w(TAG, "start ${g.name}")
     }
 
@@ -197,6 +262,11 @@ class MainActivity : Activity() {
     }
 
     private fun direction(button: Int) {
+        if (room.hub && !room.asking) {
+            if (button == PadLink.LEFT) room.hubSel = 0
+            if (button == PadLink.RIGHT) room.hubSel = 1
+            return
+        }
         if (room.asking) {
             if (button == PadLink.LEFT || button == PadLink.RIGHT) room.askYes = !room.askYes
             return
@@ -236,6 +306,13 @@ class MainActivity : Activity() {
             }
             return
         }
+        if (room.hub) {
+            when (button) {
+                PadLink.A, PadLink.START -> enter(Platform.entries[room.hubSel])
+                PadLink.B, PadLink.GUIDE -> room.asking = true
+            }
+            return
+        }
         if (room.menu != null) {
             when (button) {
                 PadLink.A, PadLink.START -> pickFilter(room.menuSel)
@@ -250,7 +327,7 @@ class MainActivity : Activity() {
             PadLink.BACK -> openMenu()
             PadLink.LB -> stepFilter(-1)
             PadLink.RB -> stepFilter(1)
-            PadLink.B -> room.asking = true
+            PadLink.B -> backToHub()
         }
     }
 
@@ -287,6 +364,7 @@ class MainActivity : Activity() {
             when {
                 room.asking -> room.asking = false
                 room.menu != null -> room.menu = null
+                !room.hub -> backToHub()
                 else -> room.asking = true
             }
             return true

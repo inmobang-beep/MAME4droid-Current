@@ -82,6 +82,16 @@ class RoomView(context: Context) : View(context) {
     var onPickFilter: ((Int) -> Unit)? = null
     var onCloseMenu: (() -> Unit)? = null
     var onExit: (() -> Unit)? = null
+    var onHubPick: ((Int) -> Unit)? = null
+
+    /** Main menu: which machine to play (0 arcade/MAME, 1 PSP). */
+    var hub = false
+        set(v) { field = v; invalidate() }
+    var hubSel = 0
+        set(v) { field = v.coerceIn(0, 1); orbit.poke(); invalidate() }
+    var hubCounts = intArrayOf(0, 0)
+    var platformLabel = ""
+    private val hubArt = arrayOf(load("gameroom/art/hub/mame.jpg"), load("gameroom/art/hub/psp.jpg"))
 
     /** «Quit?» on screen; [askYes] is the highlighted answer. */
     var asking = false
@@ -237,24 +247,32 @@ class RoomView(context: Context) : View(context) {
         scale = min(width / W, usable / H)
         offX = (width - W * scale) / 2f
         offY = (usable - H * scale) / 2f
-        if (mode == Mode.ORBIT) {
+        if (mode == Mode.ORBIT || hub) {
             // the room light covers the whole screen
             c.save()
             c.scale(width / W, height / H)
-            current?.let { g -> orbit.light(g.name, snapOf(g.name)) }
+            if (hub) orbit.light("hub", null) else current?.let { g -> orbit.light(g.name, snapOf(g.name)) }
             orbit.drawRoom(c)
             c.restore()
         }
         c.save()
         c.translate(offX, offY)
         c.scale(scale, scale)
-        if (mode == Mode.ORBIT) {
+        if (mode == Mode.ORBIT && !hub) {
             val moving = orbit.tick(games.size) { i -> selected = i }
             // keep the room alive: smooth while turning, gently otherwise
             if (moving) postInvalidateOnAnimation() else postInvalidateDelayed(40)
         }
 
-        label(c, "BEETLE GAME ROOM", 96f, 72f, 26f, ACCENT, bold, spacing = 0.12f)
+        label(c, if (hub || platformLabel.isEmpty()) "BEETLE GAME ROOM" else "BEETLE GAME ROOM  ·  $platformLabel", 96f, 72f, 26f, ACCENT, bold, spacing = 0.12f)
+        if (hub) {
+            pill(c, EXIT_BTN, "✕  종료")
+            drawHub(c)
+            if (asking) drawAsk(c)
+            c.restore()
+            postInvalidateDelayed(40)
+            return
+        }
         label(c, "거르기 · $filterLabel  ▾", 96f, 116f, 28f, MUTED, semi)
         pill(c, MODE_BTN, when (mode) {
             Mode.ORBIT -> "☰  목록으로 보기"
@@ -269,7 +287,7 @@ class RoomView(context: Context) : View(context) {
             Mode.TILES -> drawTiles(c)
         }
 
-        label(c, "A 실행   X 보기 바꾸기   SELECT 거르기   LB·RB 빨리 거르기   Y 즐겨찾기   B 종료", 96f, 1046f, 22f, FAINT, regular)
+        label(c, "A 실행   X 보기 바꾸기   SELECT 거르기   LB·RB 빨리 거르기   Y 즐겨찾기   B 메인 메뉴", 96f, 1046f, 22f, FAINT, regular)
         menu?.let { drawMenu(c, it) }
         if (asking) drawAsk(c)
         c.restore()
@@ -308,6 +326,37 @@ class RoomView(context: Context) : View(context) {
         }
         if (games.isNotEmpty())
             label(c, "${selected + 1} / ${games.size}", LIST.right, LIST.bottom + 46, 26f, FAINT, regular, right = true)
+    }
+
+    private val hubBox = arrayOf(RectF(180f, 210f, 900f, 900f), RectF(1020f, 210f, 1740f, 900f))
+
+    private fun drawHub(c: Canvas) {
+        val names = arrayOf("오락실", "PSP")
+        val engines = arrayOf("MAME", "PPSSPP")
+        val b = orbit.breath()
+        for (i in 0..1) {
+            val sel = i == hubSel
+            val r = hubBox[i]
+            c.save()
+            if (sel) c.scale(1.03f, 1.03f, r.centerX(), r.centerY())
+            glass(c, r, 34f)
+            val art = RectF(r.left + 24, r.top + 24, r.right - 24, r.top + 24 + (r.width() - 48) * 9 / 16)
+            hubArt[i]?.let { a ->
+                c.save(); c.clipPath(Path().apply { addRoundRect(art, 22f, 22f, Path.Direction.CW) })
+                bmp.alpha = if (sel) 255 else 150
+                c.drawBitmap(a, null, art, bmp); bmp.alpha = 255; c.restore()
+            }
+            label(c, names[i], r.left + 44, art.bottom + 92, 64f, if (sel) INK else MUTED, bold)
+            label(c, "${engines[i]}  ·  게임 ${hubCounts[i]}개", r.left + 46, art.bottom + 140, 28f, if (sel) ACCENT else FAINT, semi)
+            if (sel) {
+                stroke.color = ACCENT; stroke.alpha = (60 + 60 * b).toInt(); stroke.strokeWidth = 18f
+                c.drawRoundRect(r, 34f, 34f, stroke)
+                stroke.alpha = 255; stroke.strokeWidth = 4f
+                c.drawRoundRect(r, 34f, 34f, stroke)
+            }
+            c.restore()
+        }
+        label(c, "←→ 고르기   A 들어가기   B 종료", 96f, 1046f, 22f, FAINT, regular)
     }
 
     private fun drawOrbit(c: Canvas) {
@@ -531,7 +580,7 @@ class RoomView(context: Context) : View(context) {
         val y = (ev.y - offY) / scale
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> { downX = x; downY = y; dragged = false; dragStartTop = top; dragStartTarget = orbit.target; orbit.poke() }
-            MotionEvent.ACTION_MOVE -> if (menu == null && !asking) {
+            MotionEvent.ACTION_MOVE -> if (menu == null && !asking && !hub) {
                 if (mode == Mode.ORBIT) spin(x, y) else drag(y)
             }
             MotionEvent.ACTION_UP -> if (!dragged) tap(x, y) else if (mode == Mode.ORBIT && games.isNotEmpty()) {
@@ -571,6 +620,11 @@ class RoomView(context: Context) : View(context) {
     }
 
     private fun tap(x: Float, y: Float) {
+        if (hub && !asking) {
+            if (EXIT_BTN.contains(x, y)) { asking = true; return }
+            for (i in 0..1) if (hubBox[i].contains(x, y)) { if (i == hubSel) onHubPick?.invoke(i) else hubSel = i }
+            return
+        }
         if (asking) {
             when {
                 ASK_YES.contains(x, y) -> onExit?.invoke()
