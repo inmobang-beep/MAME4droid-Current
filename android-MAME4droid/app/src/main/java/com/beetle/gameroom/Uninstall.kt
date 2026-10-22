@@ -61,8 +61,9 @@ object Uninstall {
             if (out == null || out.lines().any { it.startsWith("/sdcard/") })
                 return "롬·바이오스·세이브를 다 지우지 못해 앱은 지우지 않았습니다 — 다시 해 주세요"
         }
-        // the app itself, after this process has had time to show «지우는 중…»
-        val out = Shell.run("nohup sh -c 'sleep 2; pm uninstall $PKG' </dev/null >/dev/null 2>&1 & echo STARTED")
+        // the app itself, after this process has had time to show «지우는 중…»; setsid so adbd
+        // does not take the command down with the connection when this app dies
+        val out = Shell.run("setsid nohup sh -c 'sleep 2; pm uninstall $PKG' </dev/null >/dev/null 2>&1 & echo STARTED")
         Log.w(TAG, "uninstall: self removal $out")
         if (out?.contains("STARTED") != true) return "앱 지우기를 시작하지 못했습니다 — 다시 해 주세요"
         return null
