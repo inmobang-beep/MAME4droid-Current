@@ -69,7 +69,11 @@ class MainActivity : Activity() {
         room.onExit = ::quit
         setContentView(room)
         filterId = prefs.getString("filter", "all") ?: "all"
-        room.mode = if (prefs.getString("mode", "list") == "tiles") RoomView.Mode.TILES else RoomView.Mode.LIST
+        room.mode = when (prefs.getString("mode", "orbit")) {
+            "list" -> RoomView.Mode.LIST
+            "tiles" -> RoomView.Mode.TILES
+            else -> RoomView.Mode.ORBIT
+        }
         val need = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
         if (need.any { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }) requestPermissions(need, 1)
     }
@@ -95,7 +99,7 @@ class MainActivity : Activity() {
         held = -1
         pad.stop()
         prefs.edit().putString("filter", filterId)
-            .putString("mode", if (room.mode == RoomView.Mode.TILES) "tiles" else "list")
+            .putString("mode", room.mode.name.lowercase())
             .apply { room.current?.let { putString("game", it.name) } }
             .apply()
     }
@@ -160,7 +164,7 @@ class MainActivity : Activity() {
     }
 
     private fun toggleMode() {
-        room.mode = if (room.mode == RoomView.Mode.LIST) RoomView.Mode.TILES else RoomView.Mode.LIST
+        room.mode = RoomView.Mode.entries[(room.mode.ordinal + 1) % RoomView.Mode.entries.size]
     }
 
     private fun toggleFavourite() {
@@ -215,6 +219,7 @@ class MainActivity : Activity() {
 
     private fun press(button: Int) {
         if (!resumed) return
+        room.poke()
         when (button) {
             PadLink.UP, PadLink.DOWN, PadLink.LEFT, PadLink.RIGHT -> {
                 direction(button)

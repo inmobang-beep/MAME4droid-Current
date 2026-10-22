@@ -70,7 +70,9 @@ class RoomView(context: Context) : View(context) {
         const val MENU_ROWS = 12
     }
 
-    enum class Mode { LIST, TILES }
+    enum class Mode { ORBIT, LIST, TILES }
+
+    private val orbit = Orbit()
 
     // ------------------------------------------------------------ state set by the activity
 
@@ -88,7 +90,7 @@ class RoomView(context: Context) : View(context) {
         set(v) { field = v; invalidate() }
 
     var mode = Mode.LIST
-        set(v) { field = v; clampTop(); invalidate() }
+        set(v) { field = v; if (v == Mode.ORBIT) orbit.reset(selected); clampTop(); invalidate() }
     var games: List<Game> = emptyList(); private set
     var selected = 0; private set
     private var top = 0
@@ -174,14 +176,20 @@ class RoomView(context: Context) : View(context) {
         games = list
         val i = keepName?.let { n -> list.indexOfFirst { it.name == n } } ?: -1
         selected = if (i >= 0) i else min(selected, max(0, list.size - 1))
+        orbit.reset(selected)
         clampTop()
         invalidate()
     }
 
+    /** Any input: stops the attract turn. */
+    fun poke() = orbit.poke()
+
     /** List: up/down one row (wrapping), left/right a page. Tiles: left/right one tile, up/down one row. */
     fun step(dx: Int, dy: Int) {
         if (games.isEmpty()) return
+        orbit.poke()
         selected = when (mode) {
+            Mode.ORBIT -> orbit.turn(if (dx != 0) dx else dy * 10, games.size)
             Mode.LIST -> if (dy != 0) Math.floorMod(selected + dy, games.size)
                          else (selected + dx * ROWS).coerceIn(0, games.size - 1)
             Mode.TILES -> if (dx != 0) (selected + dx).coerceIn(0, games.size - 1)
@@ -229,16 +237,37 @@ class RoomView(context: Context) : View(context) {
         scale = min(width / W, usable / H)
         offX = (width - W * scale) / 2f
         offY = (usable - H * scale) / 2f
+        if (mode == Mode.ORBIT) {
+            // the room light covers the whole screen
+            c.save()
+            c.scale(width / W, height / H)
+            current?.let { g -> orbit.light(g.name, snapOf(g.name)) }
+            orbit.drawRoom(c)
+            c.restore()
+        }
         c.save()
         c.translate(offX, offY)
         c.scale(scale, scale)
+        if (mode == Mode.ORBIT) {
+            val moving = orbit.tick(games.size) { i -> selected = i }
+            // keep the room alive: smooth while turning, gently otherwise
+            if (moving) postInvalidateOnAnimation() else postInvalidateDelayed(40)
+        }
 
         label(c, "BEETLE GAME ROOM", 96f, 72f, 26f, ACCENT, bold, spacing = 0.12f)
         label(c, "거르기 · $filterLabel  ▾", 96f, 116f, 28f, MUTED, semi)
-        pill(c, MODE_BTN, if (mode == Mode.LIST) "▦  타일로 보기" else "☰  목록으로 보기")
+        pill(c, MODE_BTN, when (mode) {
+            Mode.ORBIT -> "☰  목록으로 보기"
+            Mode.LIST -> "▦  타일로 보기"
+            Mode.TILES -> "◎  무대로 보기"
+        })
         pill(c, EXIT_BTN, "✕  종료")
 
-        if (mode == Mode.LIST) drawList(c) else drawTiles(c)
+        when (mode) {
+            Mode.ORBIT -> drawOrbit(c)
+            Mode.LIST -> drawList(c)
+            Mode.TILES -> drawTiles(c)
+        }
 
         label(c, "A 실행   X 보기 바꾸기   SELECT 거르기   LB·RB 빨리 거르기   Y 즐겨찾기   B 종료", 96f, 1046f, 22f, FAINT, regular)
         menu?.let { drawMenu(c, it) }
@@ -279,6 +308,77 @@ class RoomView(context: Context) : View(context) {
         }
         if (games.isNotEmpty())
             label(c, "${selected + 1} / ${games.size}", LIST.right, LIST.bottom + 46, 26f, FAINT, regular, right = true)
+    }
+
+    private fun drawOrbit(c: Canvas) {
+        if (games.isEmpty()) {
+            label(c, message ?: "이 목록에는 게임이 없습니다", 96f, 520f, 40f, MUTED, semi, maxW = 1700f)
+            return
+        }
+        orbit.drawStage(c, games.size) { cv, index, face, front, alpha -> cardFace(cv, games[index], face, front, alpha) }
+
+        val g = current ?: return
+        val tint = orbit.tint
+        val top = 760f
+        val fav = if (g.name in favourites) "★ " else ""
+        label(c, fav + g.title, 120f, top + 34, 60f, INK, bold, maxW = 1280f)
+        fill.color = tint; fill.alpha = 255
+        c.drawRoundRect(RectF(120f, top + 54, 300f, top + 60), 3f, 3f, fill)
+        // facts as glass chips
+        var x = 120f
+        val facts = listOfNotNull(
+            g.genre.label, g.year.ifEmpty { null }, g.maker.ifEmpty { null },
+            if (g.playersNum > 0) "${g.playersNum}인용" else null, if (g.vertical) "세로 화면" else null)
+        text.textSize = 24f; text.typeface = semi
+        for ((n, f) in facts.withIndex()) {
+            val w = min(text.measureText(f), 420f) + 40f
+            val r = RectF(x, top + 82, x + w, top + 128)
+            fill.color = Color.WHITE; fill.alpha = 22
+            c.drawRoundRect(r, 23f, 23f, fill)
+            stroke.color = if (n == 0) tint else Color.WHITE; stroke.alpha = if (n == 0) 220 else 60; stroke.strokeWidth = 2f
+            c.drawRoundRect(r, 23f, 23f, stroke)
+            label(c, f, r.centerX(), r.centerY() + 8.5f, 24f, if (n == 0) tint else MUTED, semi, center = true, maxW = 420f)
+            x += w + 14f
+        }
+        // breathing start prompt
+        val b = orbit.breath()
+        val start = RectF(1520f, top - 12, 1824f, top + 52)
+        fill.color = tint; fill.alpha = (60 + 120 * b).toInt()
+        c.drawRoundRect(start, 32f, 32f, fill)
+        stroke.color = tint; stroke.alpha = 255; stroke.strokeWidth = 2.5f
+        c.drawRoundRect(start, 32f, 32f, stroke)
+        label(c, "Ⓐ  게임 시작", start.centerX(), start.centerY() + 10f, 28f, INK, bold, center = true)
+        label(c, "${selected + 1} / ${games.size}", 1824f, top + 116, 26f, FAINT, regular, right = true)
+    }
+
+    /** One card on the stage, drawn at (0,0,w,h) in the card's own space. */
+    private fun cardFace(c: Canvas, g: Game, face: RectF, front: Boolean, alpha: Int) {
+        val shot = snapOf(g.name)
+        c.save()
+        c.clipPath(orbit.clip(face))
+        fill.color = DARK; fill.alpha = alpha
+        c.drawRect(face, fill)
+        bmp.alpha = alpha
+        if (shot != null) {
+            val k = min(face.width() / shot.width, face.height() / shot.height)
+            val w = shot.width * k; val h = shot.height * k
+            c.drawBitmap(shot, null, RectF(face.centerX() - w / 2, face.centerY() - h / 2, face.centerX() + w / 2, face.centerY() + h / 2), bmp)
+        } else {
+            genreArt(g.genre)?.let { c.drawBitmap(it, null, face, bmp) }
+            label(c, g.title, face.centerX(), face.bottom - 28f, 30f, Color.argb(alpha, 244, 247, 250), bold, center = true, maxW = face.width() - 40)
+        }
+        bmp.alpha = 255
+        c.restore()
+        // glass edge; the front card glows in the room colour
+        if (front) {
+            stroke.color = orbit.tint; stroke.alpha = 70; stroke.strokeWidth = 16f
+            c.drawRoundRect(face, 22f, 22f, stroke)
+            stroke.alpha = 255; stroke.strokeWidth = 4f
+            c.drawRoundRect(face, 22f, 22f, stroke)
+        } else {
+            stroke.color = Color.WHITE; stroke.alpha = alpha / 4; stroke.strokeWidth = 2f
+            c.drawRoundRect(face, 22f, 22f, stroke)
+        }
     }
 
     private fun drawTiles(c: Canvas) {
@@ -430,11 +530,26 @@ class RoomView(context: Context) : View(context) {
         val x = (ev.x - offX) / scale
         val y = (ev.y - offY) / scale
         when (ev.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { downX = x; downY = y; dragged = false; dragStartTop = top }
-            MotionEvent.ACTION_MOVE -> if (menu == null && !asking) drag(y)
-            MotionEvent.ACTION_UP -> if (!dragged) tap(x, y)
+            MotionEvent.ACTION_DOWN -> { downX = x; downY = y; dragged = false; dragStartTop = top; dragStartTarget = orbit.target; orbit.poke() }
+            MotionEvent.ACTION_MOVE -> if (menu == null && !asking) {
+                if (mode == Mode.ORBIT) spin(x, y) else drag(y)
+            }
+            MotionEvent.ACTION_UP -> if (!dragged) tap(x, y) else if (mode == Mode.ORBIT && games.isNotEmpty()) {
+                selected = orbit.settle(games.size); invalidate()
+            }
         }
         return true
+    }
+
+    private var dragStartTarget = 0f
+
+    private fun spin(x: Float, y: Float) {
+        if (games.isEmpty() || downY < 140f || downY > 720f) return
+        if (!dragged && abs(x - downX) < 24) return
+        dragged = true
+        orbit.drag(dragStartTarget, (x - downX) / 340f)
+        selected = Math.floorMod(Math.round(orbit.target), games.size)
+        invalidate()
     }
 
     private fun drag(y: Float) {
@@ -476,6 +591,14 @@ class RoomView(context: Context) : View(context) {
         if (MODE_BTN.contains(x, y)) { onToggleMode?.invoke(); return }
         if (EXIT_BTN.contains(x, y)) { asking = true; return }
         if (FILTER_BTN.contains(x, y)) { onOpenMenu?.invoke(); return }
+        if (mode == Mode.ORBIT) {
+            if (y in 140f..720f) when {
+                abs(x - Orbit.CX) < Orbit.CARD_W / 2 -> current?.let { onLaunch?.invoke(it) }
+                x < Orbit.CX -> step(-1, 0)
+                else -> step(1, 0)
+            } else if (RectF(1520f, 748f, 1824f, 812f).contains(x, y)) current?.let { onLaunch?.invoke(it) }
+            return
+        }
         if (mode == Mode.LIST) {
             val inner = listInner()
             if (inner.contains(x, y) && inner.contains(downX, downY)) {
