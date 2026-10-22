@@ -14,6 +14,9 @@ import java.util.zip.Inflater
  * Titles come from the game's own PARAM.SFO and the card picture from PIC1.PNG
  * (or ICON0.PNG), read straight out of .iso and .cso images and cached in [cache]
  * (<key>.png and <key>.txt), so a scan after the first one is quick.
+ *
+ * Next to a disc, <name>.txt (its first line) and <name>.png name and picture it
+ * instead, e.g. for a modded game whose disc still says the original title.
  */
 object PspLibrary {
     private const val TAG = "BeetleGameRoom"
@@ -38,10 +41,17 @@ object PspLibrary {
             val key = "psp_" + label.replace(Regex("[^A-Za-z0-9_]"), "_").take(60) + "_" + (f.length() % 100000)
             paths[key] = f
             val meta = File(cache, "$key.txt")
-            val title = if (meta.isFile) meta.readText() else {
-                val t = try { readDisc(f, File(cache, "$key.png")) } catch (e: Exception) { Log.w(TAG, "psp ${f.name}: $e"); null }
+            val png = File(cache, "$key.png")
+            var title = if (meta.isFile) meta.readText() else {
+                val t = try { readDisc(f, png) } catch (e: Exception) { Log.w(TAG, "psp ${f.name}: $e"); null }
                 (t ?: label).also { meta.writeText(it) }
             }
+            // own name and picture beside the disc
+            val stem = File(f.parentFile, f.nameWithoutExtension)
+            File("${stem.path}.txt").takeIf { it.isFile }?.let { t ->
+                t.readLines().firstOrNull { it.isNotBlank() }?.trim()?.let { title = it.removePrefix("\uFEFF") }
+            }
+            File("${stem.path}.png").takeIf { it.isFile && it.lastModified() > png.lastModified() }?.copyTo(png, overwrite = true)
             games += Game(key, title, "", "", "PSP", "", "")
         }
         val collator = Collator.getInstance(Locale.KOREAN)
@@ -106,11 +116,10 @@ object PspLibrary {
     /** Title of the game; PIC1.PNG (or ICON0.PNG) saved to [png]. Null when the image cannot be read. */
     private fun readDisc(f: File, png: File): String? {
         if (f.extension.equals("pbp", true)) return readPbp(f, png)
-        val src: Sectors = when (f.extension.lowercase()) {
-            "iso" -> Iso(f)
-            "cso" -> Cso(f)
-            else -> return null
-        }
+        if (f.extension.equals("chd", true)) return null
+        // by content: a compressed image is often still called .iso
+        val magic = ByteArray(4).also { b -> RandomAccessFile(f, "r").use { it.readFully(b) } }
+        val src: Sectors = if (String(magic, Charsets.US_ASCII) == "CISO") Cso(f) else Iso(f)
         src.use { s ->
             val pvd = s.read(16, 1)
             val root = ByteBuffer.wrap(pvd, 156, 34).order(ByteOrder.LITTLE_ENDIAN)
