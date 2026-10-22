@@ -31,6 +31,10 @@ class MainActivity : Activity() {
         private const val REPEAT_DELAY = 380L
         private const val REPEAT_EVERY = 70L
         private const val RECENT_MAX = 40
+        /** Settings menu rows; «게임룸 삭제» stays the last one. */
+        private val SETTINGS = listOf("게임룸 삭제")
+        private const val CONNECT_WAIT = 60_000L
+        private const val REMOVE_WAIT = 20_000L
     }
 
     private lateinit var room: RoomView
@@ -49,6 +53,8 @@ class MainActivity : Activity() {
     @Volatile private var pspScanning = false
     private var resumed = false
     private var launching = false
+    /** The open menu is the settings menu (else the filter menu). */
+    private var settingsMenu = false
 
     private val pad = PadLink(::press, ::release)
 
@@ -75,6 +81,9 @@ class MainActivity : Activity() {
         room.onCloseMenu = { room.menu = null }
         room.onExit = ::quit
         room.onHubPick = { enter(Platform.entries[it]) }
+        room.onOpenSettings = ::openSettings
+        room.onRemove = ::remove
+        room.onCloseRemoval = ::closeRemoval
         room.hub = true
         room.hubSel = prefs.getInt("hub", 0)
         setContentView(room)
@@ -205,14 +214,66 @@ class MainActivity : Activity() {
     }
 
     private fun openMenu() {
+        settingsMenu = false
+        room.menuTitle = "거르기"
         room.menu = filters.map { (f, g) -> "${f.label}   ${g.size}" }
         room.menuSel = filters.indexOfFirst { it.first.id == filterId }.coerceAtLeast(0)
     }
 
     private fun pickFilter(i: Int) {
+        if (settingsMenu) {
+            room.menu = null
+            if (i == SETTINGS.lastIndex) room.removal = RoomView.Removal()
+            return
+        }
         filters.getOrNull(i)?.let { filterId = it.first.id }
         room.menu = null
         apply()
+    }
+
+    private fun openSettings() {
+        settingsMenu = true
+        room.menuTitle = "설정"
+        room.menu = SETTINGS
+        room.menuSel = 0
+    }
+
+    /** «삭제» in the confirmation: connect the wireless ADB shell and let it remove the app. */
+    private fun remove() {
+        val r = room.removal ?: return
+        if (r.busy || r.started) return
+        r.busy = true; r.error = null
+        room.invalidate()
+        val wipe = r.wipeGames
+        Log.w(TAG, "uninstall: start (games too: $wipe)")
+        Uninstall.begin()
+        Thread {
+            val err = Uninstall.run(applicationContext, wipe)
+            main.post {
+                if (!r.busy) return@post // called off or timed out meanwhile
+                r.busy = false
+                if (err == null) {
+                    r.started = true
+                    // still here a while later: the uninstall did not happen
+                    main.postDelayed({
+                        if (r.started) { r.started = false; r.error = "앱을 지우지 못했습니다 — 다시 해 주세요"; room.invalidate() }
+                    }, REMOVE_WAIT)
+                } else r.error = err
+                room.invalidate()
+            }
+        }.start()
+        // nobody answered the car's permission prompt
+        main.postDelayed({ if (r.busy && Uninstall.cancel()) {
+            r.busy = false; r.error = "시간 안에 무선 ADB 에 붙지 못해 아무것도 지우지 않았습니다"; room.invalidate()
+        } }, CONNECT_WAIT)
+    }
+
+    /** B / Back on the confirmation: closes it, and calls off a removal that is still connecting. */
+    private fun closeRemoval() {
+        val r = room.removal ?: return
+        if (r.started) return
+        if (r.busy) { if (!Uninstall.cancel()) return; r.busy = false; Log.w(TAG, "uninstall: called off") }
+        room.removal = null
     }
 
     private fun toggleMode() {
@@ -262,7 +323,18 @@ class MainActivity : Activity() {
     }
 
     private fun direction(button: Int) {
-        if (room.hub && !room.asking) {
+        room.removal?.let { r ->
+            if (r.busy || r.started) return
+            when (button) {
+                PadLink.UP -> r.sel = 0
+                PadLink.DOWN -> if (r.sel == 0) r.sel = 1
+                PadLink.LEFT -> if (r.sel == 2) r.sel = 1
+                PadLink.RIGHT -> if (r.sel == 1) r.sel = 2
+            }
+            room.invalidate()
+            return
+        }
+        if (room.hub && !room.asking && room.menu == null) {
             if (button == PadLink.LEFT) room.hubSel = 0
             if (button == PadLink.RIGHT) room.hubSel = 1
             return
@@ -299,6 +371,18 @@ class MainActivity : Activity() {
                 return
             }
         }
+        room.removal?.let { r ->
+            if (button == PadLink.B || button == PadLink.BACK || button == PadLink.GUIDE) { closeRemoval(); return }
+            if (r.busy || r.started) return
+            when (button) {
+                PadLink.A, PadLink.START -> when (r.sel) {
+                    0 -> { r.wipeGames = !r.wipeGames; room.invalidate() }
+                    1 -> room.removal = null
+                    else -> remove()
+                }
+            }
+            return
+        }
         if (room.asking) {
             when (button) {
                 PadLink.A, PadLink.START -> if (room.askYes) quit() else room.asking = false
@@ -306,17 +390,18 @@ class MainActivity : Activity() {
             }
             return
         }
-        if (room.hub) {
-            when (button) {
-                PadLink.A, PadLink.START -> enter(Platform.entries[room.hubSel])
-                PadLink.B, PadLink.GUIDE -> room.asking = true
-            }
-            return
-        }
         if (room.menu != null) {
             when (button) {
                 PadLink.A, PadLink.START -> pickFilter(room.menuSel)
                 PadLink.B, PadLink.BACK, PadLink.GUIDE -> room.menu = null
+            }
+            return
+        }
+        if (room.hub) {
+            when (button) {
+                PadLink.A, PadLink.START -> enter(Platform.entries[room.hubSel])
+                PadLink.BACK -> openSettings()
+                PadLink.B, PadLink.GUIDE -> room.asking = true
             }
             return
         }
@@ -362,6 +447,7 @@ class MainActivity : Activity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             when {
+                room.removal != null -> closeRemoval()
                 room.asking -> room.asking = false
                 room.menu != null -> room.menu = null
                 !room.hub -> backToHub()

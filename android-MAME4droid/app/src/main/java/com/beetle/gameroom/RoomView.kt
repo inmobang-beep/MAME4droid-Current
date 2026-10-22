@@ -58,6 +58,7 @@ class RoomView(context: Context) : View(context) {
         // header controls
         private val MODE_BTN = RectF(1560f, 44f, 1824f, 100f)
         private val EXIT_BTN = RectF(1384f, 44f, 1540f, 100f)
+        private val SETTINGS_BTN = RectF(1208f, 44f, 1364f, 100f)
 
         // exit confirmation
         private val ASK = RectF(660f, 380f, 1260f, 700f)
@@ -68,6 +69,21 @@ class RoomView(context: Context) : View(context) {
         // filter menu
         private val MENU = RectF(560f, 110f, 1360f, 970f)
         const val MENU_ROWS = 12
+
+        // «게임룸 삭제» confirmation
+        private val DEL = RectF(460f, 170f, 1460f, 910f)
+        private val DEL_CHECK = RectF(520f, 560f, 1400f, 680f)
+        private val DEL_NO = RectF(700f, 770f, 950f, 840f)
+        private val DEL_YES = RectF(970f, 770f, 1220f, 840f)
+    }
+
+    /** «게임룸 삭제» on screen. [sel]: 0 the games tick box, 1 cancel, 2 delete. */
+    class Removal {
+        var sel = 1
+        var wipeGames = false
+        var busy = false
+        var started = false
+        var error: String? = null
     }
 
     enum class Mode { ORBIT, LIST, TILES }
@@ -83,6 +99,9 @@ class RoomView(context: Context) : View(context) {
     var onCloseMenu: (() -> Unit)? = null
     var onExit: (() -> Unit)? = null
     var onHubPick: ((Int) -> Unit)? = null
+    var onOpenSettings: (() -> Unit)? = null
+    var onRemove: (() -> Unit)? = null
+    var onCloseRemoval: (() -> Unit)? = null
 
     /** Main menu: which machine to play (0 arcade/MAME, 1 PSP). */
     var hub = false
@@ -122,8 +141,11 @@ class RoomView(context: Context) : View(context) {
         return max(inset.toFloat(), strip)
     }
 
-    /** Filter menu: labels with counts; null when closed. */
+    /** Filter or settings menu: its rows; null when closed. */
     var menu: List<String>? = null
+        set(v) { field = v; invalidate() }
+    var menuTitle = "거르기"
+    var removal: Removal? = null
         set(v) { field = v; invalidate() }
     var menuSel = 0
         set(v) { field = v; menuTop = clampMenuTop(v); invalidate() }
@@ -266,8 +288,11 @@ class RoomView(context: Context) : View(context) {
 
         label(c, if (hub || platformLabel.isEmpty()) "BEETLE GAME ROOM" else "BEETLE GAME ROOM  ·  $platformLabel", 96f, 72f, 26f, ACCENT, bold, spacing = 0.12f)
         if (hub) {
+            pill(c, SETTINGS_BTN, "⚙  설정")
             pill(c, EXIT_BTN, "✕  종료")
             drawHub(c)
+            menu?.let { drawMenu(c, it) }
+            removal?.let { drawRemoval(c, it) }
             if (asking) drawAsk(c)
             c.restore()
             postInvalidateDelayed(40)
@@ -356,7 +381,7 @@ class RoomView(context: Context) : View(context) {
             }
             c.restore()
         }
-        label(c, "←→ 고르기   A 들어가기   B 종료", 96f, 1046f, 22f, FAINT, regular)
+        label(c, "←→ 고르기   A 들어가기   SELECT 설정   B 종료", 96f, 1046f, 22f, FAINT, regular)
     }
 
     private fun drawOrbit(c: Canvas) {
@@ -460,13 +485,12 @@ class RoomView(context: Context) : View(context) {
     }
 
     private fun drawMenu(c: Canvas, items: List<String>) {
-        fill.color = Color.BLACK; fill.alpha = 150
-        c.drawRect(0f, 0f, W, H, fill)
+        dim(c, 150)
         fill.color = NAVY; fill.alpha = 245
         c.drawRoundRect(MENU, 28f, 28f, fill)
         stroke.color = ACCENT; stroke.alpha = 120; stroke.strokeWidth = 2f
         c.drawRoundRect(MENU, 28f, 28f, stroke)
-        label(c, "거르기", MENU.left + 40, MENU.top + 62, 36f, ACCENT, bold)
+        label(c, menuTitle, MENU.left + 40, MENU.top + 62, 36f, ACCENT, bold)
         val inner = menuInner()
         val rowH = inner.height() / MENU_ROWS
         for (r in 0 until MENU_ROWS) {
@@ -485,8 +509,7 @@ class RoomView(context: Context) : View(context) {
     }
 
     private fun drawAsk(c: Canvas) {
-        fill.color = Color.BLACK; fill.alpha = 150
-        c.drawRect(0f, 0f, W, H, fill)
+        dim(c, 150)
         fill.color = NAVY; fill.alpha = 245
         c.drawRoundRect(ASK, 28f, 28f, fill)
         stroke.color = ACCENT; stroke.alpha = 120; stroke.strokeWidth = 2f
@@ -498,6 +521,55 @@ class RoomView(context: Context) : View(context) {
             c.drawRoundRect(r, 22f, 22f, fill)
             label(c, if (yes) "끝내기" else "계속하기", r.centerX(), r.centerY() + 11f, 30f, if (sel) NAVY else MUTED, bold, center = true)
         }
+    }
+
+    private fun drawRemoval(c: Canvas, r: Removal) {
+        dim(c, 170)
+        fill.color = NAVY; fill.alpha = 248
+        c.drawRoundRect(DEL, 28f, 28f, fill)
+        stroke.color = ACCENT; stroke.alpha = 120; stroke.strokeWidth = 2f
+        c.drawRoundRect(DEL, 28f, 28f, stroke)
+        label(c, "Beetle Game Room 을 지울까요?", DEL.centerX(), DEL.top + 96, 40f, INK, bold, center = true)
+        Uninstall.REMOVED.forEachIndexed { i, s ->
+            label(c, "·  $s", DEL.left + 80, DEL.top + 180 + i * 56f, 30f, MUTED, semi, maxW = DEL.width() - 160)
+        }
+        // the games: off unless ticked
+        val onBox = r.sel == 0 && !r.busy && !r.started
+        if (onBox) { fill.color = Color.WHITE; fill.alpha = 26; c.drawRoundRect(DEL_CHECK, 18f, 18f, fill) }
+        stroke.color = if (onBox) ACCENT else FAINT; stroke.alpha = 255; stroke.strokeWidth = 3f
+        val box = RectF(DEL_CHECK.left + 28, DEL_CHECK.centerY() - 22, DEL_CHECK.left + 72, DEL_CHECK.centerY() + 22)
+        c.drawRoundRect(box, 8f, 8f, stroke)
+        if (r.wipeGames) {
+            fill.color = ACCENT; fill.alpha = 255
+            c.drawRoundRect(RectF(box.left + 8, box.top + 8, box.right - 8, box.bottom - 8), 5f, 5f, fill)
+        }
+        label(c, Uninstall.GAMES_LABEL, box.right + 28, DEL_CHECK.centerY() - 4, 32f, if (r.wipeGames) INK else MUTED, bold)
+        label(c, Uninstall.GAMES_DETAIL, box.right + 28, DEL_CHECK.centerY() + 36, 24f, FAINT, regular)
+
+        when {
+            r.started -> label(c, "지우는 중…", DEL.centerX(), DEL_YES.centerY() + 12f, 34f, ACCENT, bold, center = true)
+            r.busy -> {
+                label(c, "무선 ADB 에 붙는 중…", DEL.centerX(), DEL_YES.centerY() - 8f, 30f, ACCENT, bold, center = true)
+                label(c, Shell.AUTHORIZE_HINT, DEL.centerX(), DEL_YES.centerY() + 34f, 24f, MUTED, semi, center = true, maxW = DEL.width() - 80)
+            }
+            else -> {
+                r.error?.lines()?.forEachIndexed { i, line ->
+                    label(c, line, DEL.centerX(), DEL_CHECK.bottom + 34 + i * 34f, 24f, Color.parseColor("#FF8A80"), semi, center = true, maxW = DEL.width() - 80)
+                }
+                for ((rect, i) in listOf(DEL_NO to 1, DEL_YES to 2)) {
+                    val sel = r.sel == i
+                    fill.color = if (sel) ACCENT else Color.WHITE; fill.alpha = if (sel) 235 else 26
+                    c.drawRoundRect(rect, 22f, 22f, fill)
+                    label(c, if (i == 1) "취소" else "삭제", rect.centerX(), rect.centerY() + 11f, 30f, if (sel) NAVY else MUTED, bold, center = true)
+                }
+            }
+        }
+    }
+
+    /** Darkens the whole view, also outside the design area (letterbox, bottom strip). */
+    private fun dim(c: Canvas, alpha: Int) {
+        fill.color = Color.BLACK; fill.alpha = alpha
+        c.drawRect(-offX / scale, -offY / scale, (width - offX) / scale, (height - offY) / scale, fill)
     }
 
     private fun sub(g: Game) = listOf(g.year, g.maker).filter { it.isNotEmpty() }.joinToString(" · ")
@@ -580,7 +652,7 @@ class RoomView(context: Context) : View(context) {
         val y = (ev.y - offY) / scale
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> { downX = x; downY = y; dragged = false; dragStartTop = top; dragStartTarget = orbit.target; orbit.poke() }
-            MotionEvent.ACTION_MOVE -> if (menu == null && !asking && !hub) {
+            MotionEvent.ACTION_MOVE -> if (menu == null && removal == null && !asking && !hub) {
                 if (mode == Mode.ORBIT) spin(x, y) else drag(y)
             }
             MotionEvent.ACTION_UP -> if (!dragged) tap(x, y) else if (mode == Mode.ORBIT && games.isNotEmpty()) {
@@ -620,8 +692,19 @@ class RoomView(context: Context) : View(context) {
     }
 
     private fun tap(x: Float, y: Float) {
-        if (hub && !asking) {
+        removal?.let { r ->
+            if (r.busy) { if (!DEL.contains(x, y)) onCloseRemoval?.invoke(); return }
+            if (r.started) return
+            when {
+                DEL_CHECK.contains(x, y) -> { r.wipeGames = !r.wipeGames; r.sel = 0; invalidate() }
+                DEL_YES.contains(x, y) -> { r.sel = 2; onRemove?.invoke() }
+                DEL_NO.contains(x, y) || !DEL.contains(x, y) -> onCloseRemoval?.invoke()
+            }
+            return
+        }
+        if (hub && !asking && menu == null) {
             if (EXIT_BTN.contains(x, y)) { asking = true; return }
+            if (SETTINGS_BTN.contains(x, y)) { onOpenSettings?.invoke(); return }
             for (i in 0..1) if (hubBox[i].contains(x, y)) { if (i == hubSel) onHubPick?.invoke(i) else hubSel = i }
             return
         }
