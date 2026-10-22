@@ -1,0 +1,47 @@
+--- a/Core/Config.cpp
++++ b/Core/Config.cpp
+@@ -1233,9 +1233,16 @@
+ }
+ 
+ void Config::Reload() {
++	// Beetle Game Room: keep what the command line asked for (--escape-exit,
++	// --pause-menu-exit); Android reloads the config once storage access is
++	// confirmed, which used to put these back to their defaults.
++	const bool pauseExits = bPauseExitsEmulator;
++	const bool pauseMenuExits = bPauseMenuExitsEmulator;
+ 	inReload_ = true;
+ 	Load();
+ 	inReload_ = false;
++	bPauseExitsEmulator = pauseExits;
++	bPauseMenuExitsEmulator = pauseMenuExits;
+ }
+ 
+ // Call this if you change the search path (such as when changing memstick directory. can't
+--- a/android/build.gradle.kts
++++ b/android/build.gradle.kts
+@@ -121,12 +121,14 @@
+ 	defaultConfig {
+ 		applicationId = "org.ppsspp.ppsspp"
+ 		// Access the git version info via the extension
+-		if (gitVersionName != "unknown") {
++		if (false && gitVersionName != "unknown") { // Beetle Game Room: tarball build, fixed version
+ 			println("INFO: Overriding Android Version Name, Code: $gitVersionName $gitVersionCode")
+ 			versionName = gitVersionName
+ 			versionCode = gitVersionCode
+ 		} else {
+-			println("(not using these:) Android Version Name, Code: $gitVersionName $gitVersionCode")
++			// source tarball without git history (Beetle Game Room build)
++			versionName = "1.20.4"
++			versionCode = 120400
+ 		}
+ 		file("versionname.txt").writeText(gitVersionName)
+ 		file("versioncode.txt").writeText(gitVersionCode.toString())
+@@ -206,7 +208,7 @@
+ 				}
+ 			}
+ 			ndk {
+-				abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86_64"))
++				abiFilters.addAll(listOf("arm64-v8a")) // Beetle Game Room: arm64 only
+ 				// debugSymbolLevel = "FULL"  // These don't actually help much in the Google Play crash report. We do still have symbols locally.
+ 			}
+ 		}

@@ -95,6 +95,8 @@ android {
 
 dependencies {
 	//implementation "androidx.annotation:annotation:1.7.0"
+	// Beetle Game Room: PPSSPP for the PSP side of the main menu
+	implementation project(':ppsspp')
 }
 
 androidComponents {

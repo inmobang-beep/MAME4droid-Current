@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PPSSPP (GPL v2 or later, https://github.com/hrydgard/ppsspp) inside Beetle Game Room.
+     No launcher entry of its own: Beetle Game Room starts it for a PSP disc, in its own process. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-feature android:glEsVersion="0x00020000" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+
+    <application>
+        <activity
+            android:name="org.ppsspp.ppsspp.PpssppActivity"
+            android:process=":psp"
+            android:configChanges="locale|keyboard|keyboardHidden|navigation|uiMode"
+            android:theme="@style/ppsspp_style"
+            android:launchMode="singleInstance"
+            android:exported="false" />
+        <activity android:name="org.ppsspp.ppsspp.ImageResultProxyActivity"
+            android:process=":psp"
+            android:theme="@style/Theme.ProxyTransparent"
+            android:launchMode="standard" />
+        <activity android:name="org.ppsspp.ppsspp.DocumentResultProxyActivity"
+            android:process=":psp"
+            android:theme="@style/Theme.ProxyTransparent"
+            android:launchMode="standard" />
+    </application>
+</manifest>

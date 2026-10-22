@@ -17,23 +17,30 @@ import java.util.zip.Inflater
  */
 object PspLibrary {
     private const val TAG = "BeetleGameRoom"
-    val EXTENSIONS = setOf("iso", "cso", "chd", "pbp")
+    val EXTENSIONS = setOf("iso", "cso", "chd")
 
     data class Entry(val key: String, val file: File)
 
     fun scan(dirs: List<File>, cache: File): Pair<List<Game>, Map<String, File>> {
         cache.mkdirs()
-        val files = dirs.flatMap { d -> d.listFiles()?.toList().orEmpty() }
-            .filter { it.isFile && it.extension.lowercase() in EXTENSIONS }
+        // disc images, and homebrew/PSN folders holding an EBOOT.PBP
+        val files = dirs.flatMap { d -> d.listFiles()?.toList().orEmpty() }.mapNotNull { f ->
+            when {
+                f.isFile && f.extension.lowercase() in EXTENSIONS -> f
+                f.isDirectory -> f.listFiles()?.firstOrNull { it.isFile && it.name.equals("EBOOT.PBP", true) }
+                else -> null
+            }
+        }
         val games = mutableListOf<Game>()
         val paths = HashMap<String, File>()
         for (f in files) {
-            val key = "psp_" + f.nameWithoutExtension.replace(Regex("[^A-Za-z0-9_]"), "_").take(60) + "_" + (f.length() % 100000)
+            val label = if (f.name.equals("EBOOT.PBP", true)) f.parentFile!!.name else f.nameWithoutExtension
+            val key = "psp_" + label.replace(Regex("[^A-Za-z0-9_]"), "_").take(60) + "_" + (f.length() % 100000)
             paths[key] = f
             val meta = File(cache, "$key.txt")
             val title = if (meta.isFile) meta.readText() else {
                 val t = try { readDisc(f, File(cache, "$key.png")) } catch (e: Exception) { Log.w(TAG, "psp ${f.name}: $e"); null }
-                (t ?: f.nameWithoutExtension).also { meta.writeText(it) }
+                (t ?: label).also { meta.writeText(it) }
             }
             games += Game(key, title, "", "", "PSP", "", "")
         }
@@ -98,6 +105,7 @@ object PspLibrary {
 
     /** Title of the game; PIC1.PNG (or ICON0.PNG) saved to [png]. Null when the image cannot be read. */
     private fun readDisc(f: File, png: File): String? {
+        if (f.extension.equals("pbp", true)) return readPbp(f, png)
         val src: Sectors = when (f.extension.lowercase()) {
             "iso" -> Iso(f)
             "cso" -> Cso(f)
@@ -113,6 +121,23 @@ object PspLibrary {
             val pic = find(s, gameDir.first, gameDir.second, "PIC1.PNG") ?: find(s, gameDir.first, gameDir.second, "ICON0.PNG")
             pic?.let { png.writeBytes(readFile(s, it)) }
             return sfo?.let { sfoTitle(it) }
+        }
+    }
+
+    /** EBOOT.PBP: header with offsets of PARAM.SFO, ICON0, ICON1, PIC0, PIC1, ... */
+    private fun readPbp(f: File, png: File): String? {
+        RandomAccessFile(f, "r").use { raf ->
+            val h = ByteArray(40); raf.readFully(h)
+            val bb = ByteBuffer.wrap(h).order(ByteOrder.LITTLE_ENDIAN)
+            if (bb.getInt(0) != 0x50425000) return null // "\0PBP"
+            val off = IntArray(8) { bb.getInt(8 + it * 4) }
+            fun part(i: Int): ByteArray {
+                val end = if (i < 7) off[i + 1] else raf.length().toInt()
+                val b = ByteArray(maxOf(0, end - off[i])); raf.seek(off[i].toLong()); raf.readFully(b); return b
+            }
+            val pic = part(4).takeIf { it.size > 8 } ?: part(1).takeIf { it.size > 8 }
+            pic?.let { png.writeBytes(it) }
+            return sfoTitle(part(0))
         }
     }
 

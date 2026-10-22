@@ -22,6 +22,7 @@ data class Game(
 
 /** Genre artwork and label, matched on the romlist category like the desktop layout. */
 enum class Genre(val art: String, val label: String, vararg val keys: String) {
+    PSP("psp", "PSP", "psp"),
     GUN("gun", "건슈팅", "gun"),
     THREE_D("3d", "3D 액션", "3d"),
     FIGHTING("fighting", "대전격투", "fight", "versus"),

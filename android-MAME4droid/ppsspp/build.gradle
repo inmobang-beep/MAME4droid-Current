@@ -1,0 +1,27 @@
+// PPSSPP 1.20.4 (GPL v2 or later) as a library of Beetle Game Room.
+// Native library built from the PPSSPP sources with its own Android build (arm64),
+// Java sources, resources and assets taken from the same release.
+apply plugin: 'com.android.library'
+
+android {
+    namespace = 'org.ppsspp.ppsspp'
+    compileSdk = 35
+
+    defaultConfig {
+        minSdkVersion 29
+        buildConfigField "String", "FLAVOR", "\"normal\""
+    }
+    buildFeatures { buildConfig = true }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    packagingOptions { jniLibs { useLegacyPackaging = true } }
+    lint { abortOnError = false }
+}
+
+dependencies {
+    implementation "androidx.appcompat:appcompat:1.7.1"
+    implementation "androidx.documentfile:documentfile:1.1.0"
+    implementation "com.google.protobuf:protobuf-javalite:4.33.5"
+}
