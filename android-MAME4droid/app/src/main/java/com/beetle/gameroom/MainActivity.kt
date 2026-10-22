@@ -168,12 +168,14 @@ class MainActivity : Activity() {
     private fun recent(): List<String> = prefs.getString("recent", "")!!.split('\n').filter { it.isNotEmpty() }
 
     private fun reload() {
+        // a game list from the game manager, else whatever ROM sets are in the folder
         val f = File(mameDir(), "BeetleGameRoom.txt")
-        val stamp = if (f.isFile) f.lastModified() else -1L
+        val stamp = if (f.isFile) f.lastModified() else -mameDir().lastModified() - 1
         if (stamp != listStamp || mameGames.isEmpty()) {
             listStamp = stamp
-            mameGames = RomList.read(f)
-            Log.w(TAG, "romlist ${f.path}: ${mameGames.size} games")
+            mameGames = if (f.isFile) RomList.read(f) else try { RomScan.scan(mameDir(), assets) }
+                catch (e: Exception) { Log.w(TAG, "rom folder scan: $e"); emptyList() }
+            Log.w(TAG, if (f.isFile) "romlist ${f.path}: ${mameGames.size} games" else "rom folder ${mameDir()}: ${mameGames.size} games")
         }
         // PSP discs: titles and pictures come out of the images (cached), off the UI thread
         if (!pspScanning) {
@@ -202,7 +204,7 @@ class MainActivity : Activity() {
         room.message = when {
             all.isNotEmpty() -> null
             platform == Platform.PSP -> "PSP 게임이 없습니다 — /sdcard/PSP/GAME 에 ISO·CSO 를 넣어 주세요"
-            else -> "게임 목록이 없습니다 — 맥의 «게임 관리»에서 «차로 보내기»를 해 주세요"
+            else -> "게임이 없습니다 — /sdcard/MAME 에 롬(zip)과 바이오스를 넣어 주세요"
         }
         room.setGames(games, keepName)
     }
@@ -310,6 +312,10 @@ class MainActivity : Activity() {
                 launching = false
                 Toast.makeText(this, "PSP 에뮬레이터가 이 판에 없습니다", Toast.LENGTH_LONG).show()
             }
+        } else if (g.missing.isNotEmpty()) {
+            launching = false
+            Toast.makeText(this, "${g.missing.joinToString(", ")} 이(가) 없어 켤 수 없습니다 — /sdcard/MAME 에 넣어 주세요", Toast.LENGTH_LONG).show()
+            return
         } else {
             // the MAME engine of this app, in its own process
             startActivity(Intent(this, MAME4droid::class.java).setAction(Emulator.GAME_ROOM_PLAY).putExtra("game", g.name))

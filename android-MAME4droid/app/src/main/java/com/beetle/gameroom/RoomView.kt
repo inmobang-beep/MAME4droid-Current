@@ -39,6 +39,7 @@ class RoomView(context: Context) : View(context) {
         private val ACCENT = Color.parseColor("#4FE3D6")
         private val NAVY = Color.parseColor("#0A1426")
         private val DARK = Color.rgb(4, 9, 18)
+        private val WARN = Color.parseColor("#FF8A80")
 
         // list mode
         private val CARD = RectF(96f, 160f, 1136f, 745f)
@@ -330,7 +331,8 @@ class RoomView(context: Context) : View(context) {
             val fav = if (g.name in favourites) "★ " else ""
             label(c, fav + g.title, CARD.left, y0 + 56, 54f, INK, bold, maxW = CARD.width())
             label(c, sub(g), CARD.left, y0 + 118, 30f, MUTED, regular, maxW = CARD.width())
-            if (g.players.isNotEmpty()) label(c, g.players + "인용", CARD.left, y0 + 162, 26f, FAINT, regular)
+            if (g.missing.isNotEmpty()) label(c, missingText(g), CARD.left, y0 + 162, 26f, WARN, semi, maxW = CARD.width())
+            else if (g.players.isNotEmpty()) label(c, g.players + "인용", CARD.left, y0 + 162, 26f, FAINT, regular)
         }
 
         glass(c, LIST, 28f)
@@ -423,6 +425,7 @@ class RoomView(context: Context) : View(context) {
         c.drawRoundRect(start, 32f, 32f, stroke)
         label(c, "Ⓐ  게임 시작", start.centerX(), start.centerY() + 10f, 28f, INK, bold, center = true)
         label(c, "${selected + 1} / ${games.size}", 1824f, top + 116, 26f, FAINT, regular, right = true)
+        if (g.missing.isNotEmpty()) label(c, missingText(g), 120f, top + 170, 26f, WARN, semi, maxW = 1380f)
     }
 
     /** One card on the stage, drawn at (0,0,w,h) in the card's own space. */
@@ -480,7 +483,8 @@ class RoomView(context: Context) : View(context) {
         val g = current ?: return
         val y = GRID_TOP + TILE_ROWS * TILE_H + (TILE_ROWS - 1) * GAP_Y + 52
         label(c, g.title, 96f, y, 40f, INK, bold, maxW = 1200f)
-        label(c, listOf(g.genre.label, sub(g)).filter { it.isNotEmpty() }.joinToString("  ·  "), 96f, y + 44, 26f, MUTED, regular, maxW = 1300f)
+        if (g.missing.isNotEmpty()) label(c, missingText(g), 96f, y + 44, 26f, WARN, semi, maxW = 1300f)
+        else label(c, listOf(g.genre.label, sub(g)).filter { it.isNotEmpty() }.joinToString("  ·  "), 96f, y + 44, 26f, MUTED, regular, maxW = 1300f)
         label(c, "${selected + 1} / ${games.size}", 1824f, y + 44, 26f, FAINT, regular, right = true)
     }
 
@@ -554,7 +558,7 @@ class RoomView(context: Context) : View(context) {
             }
             else -> {
                 r.error?.lines()?.forEachIndexed { i, line ->
-                    label(c, line, DEL.centerX(), DEL_CHECK.bottom + 34 + i * 34f, 24f, Color.parseColor("#FF8A80"), semi, center = true, maxW = DEL.width() - 80)
+                    label(c, line, DEL.centerX(), DEL_CHECK.bottom + 34 + i * 34f, 24f, WARN, semi, center = true, maxW = DEL.width() - 80)
                 }
                 for ((rect, i) in listOf(DEL_NO to 1, DEL_YES to 2)) {
                     val sel = r.sel == i
@@ -571,6 +575,8 @@ class RoomView(context: Context) : View(context) {
         fill.color = Color.BLACK; fill.alpha = alpha
         c.drawRect(-offX / scale, -offY / scale, (width - offX) / scale, (height - offY) / scale, fill)
     }
+
+    private fun missingText(g: Game) = "없는 파일: " + g.missing.joinToString(", ")
 
     private fun sub(g: Game) = listOf(g.year, g.maker).filter { it.isNotEmpty() }.joinToString(" · ")
 

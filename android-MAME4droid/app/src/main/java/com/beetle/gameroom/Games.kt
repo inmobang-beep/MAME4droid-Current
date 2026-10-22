@@ -1,5 +1,6 @@
 package com.beetle.gameroom
 
+import android.content.res.AssetManager
 import java.io.File
 import java.text.Collator
 import java.util.Locale
@@ -13,6 +14,8 @@ data class Game(
     val category: String,
     val players: String,
     val rotation: String,
+    /** Files this game needs that are not in the ROM folder (BIOS, original set), e.g. "neogeo.zip". */
+    val missing: List<String> = emptyList(),
 ) {
     val genre: Genre get() = Genre.of(category)
     val yearNum: Int get() = year.take(4).filter { it.isDigit() }.toIntOrNull() ?: 0
@@ -56,10 +59,12 @@ object Filters {
         fun add(f: Filter, games: List<Game> = all.filter(f.test)) { if (games.isNotEmpty() || f.id == "all") list += f to games }
 
         add(Filter("all", "전체") { true })
+        if (all.any { it.missing.isNotEmpty() }) add(Filter("ready", "바로 되는 게임") { it.missing.isEmpty() })
         add(Filter("fav", "즐겨찾기") { it.name in favourites })
         add(Filter("recent", "최근 한 게임") { it.name in recentIndex },
             all.filter { it.name in recentIndex }.sortedBy { recentIndex[it.name] })
-        Genre.entries.forEach { g -> add(Filter("genre:${g.name}", g.label) { it.genre == g }) }
+        // a genre that holds every game (a list without categories) is no filter
+        Genre.entries.forEach { g -> if (!all.all { it.genre == g }) add(Filter("genre:${g.name}", g.label) { it.genre == g }) }
         add(Filter("era:80", "1980년대 이전") { it.yearNum in 1..1989 })
         add(Filter("era:90", "1990년대") { it.yearNum in 1990..1999 })
         add(Filter("era:00", "2000년대 이후") { it.yearNum >= 2000 })
@@ -86,6 +91,42 @@ object RomList {
             .filterNot { it.category.contains("adult", true) }
             .distinctBy { it.name }
             .toList()
+        val collator = Collator.getInstance(Locale.KOREAN)
+        return games.sortedWith { a, b -> collator.compare(a.title, b.title) }
+    }
+}
+
+/**
+ * Without a game list file: the games are whatever ROM sets are in the folder, looked
+ * up in the arcade list built into the app (assets/gameroom/mamedb.tsv, made from
+ * MAME's own machine list by tools/make_gamedb.py).
+ */
+object RomScan {
+    private class Row(val title: String, val year: String, val maker: String, val cloneof: String,
+                      val bios: String, val players: String, val rotation: String)
+
+    @Volatile private var db: Map<String, Row>? = null
+
+    private fun db(assets: AssetManager): Map<String, Row> = db ?: HashMap<String, Row>(16384).also { m ->
+        assets.open("gameroom/mamedb.tsv").bufferedReader().useLines { lines ->
+            for (line in lines) {
+                val p = line.split('\t')
+                if (p.size >= 8) m[p[0]] = Row(p[1], p[2], p[3], p[4], p[5], p[6], p[7])
+            }
+        }
+        db = m
+    }
+
+    fun scan(dir: File, assets: AssetManager): List<Game> {
+        val sets = dir.listFiles()?.filter { it.isFile }
+            ?.mapNotNull { f -> f.name.lowercase().takeIf { it.endsWith(".zip") || it.endsWith(".7z") }?.substringBeforeLast('.') }
+            ?.toSet().orEmpty()
+        val db = db(assets)
+        val games = sets.mapNotNull { name ->
+            val r = db[name] ?: return@mapNotNull null
+            val missing = listOf(r.bios, r.cloneof).filter { it.isNotEmpty() && it !in sets }.map { "$it.zip" }
+            Game(name, r.title, r.year, r.maker, "", r.players, r.rotation, missing)
+        }
         val collator = Collator.getInstance(Locale.KOREAN)
         return games.sortedWith { a, b -> collator.compare(a.title, b.title) }
     }
