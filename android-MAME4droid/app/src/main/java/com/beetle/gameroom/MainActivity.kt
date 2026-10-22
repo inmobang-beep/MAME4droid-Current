@@ -311,6 +311,7 @@ class MainActivity : Activity() {
         if (platform == Platform.PSP) {
             // PPSSPP of this app, in its own process: boots the disc, and «exit» in its pause menu comes back here
             val disc = pspPaths[g.name] ?: run { launching = false; return }
+            pspOpenGl()
             val args = "\"" + disc.path.replace("\\", "\\\\").replace("\"", "\\\"") + "\" --pause-menu-exit"
             try {
                 startActivity(Intent().setClassName(packageName, "org.ppsspp.ppsspp.PpssppActivity")
@@ -328,6 +329,20 @@ class MainActivity : Activity() {
             startActivity(Intent(this, MAME4droid::class.java).setAction(Emulator.GAME_ROOM_PLAY).putExtra("game", g.name))
         }
         Log.w(TAG, "start ${g.name}")
+    }
+
+    /**
+     * PPSSPP picks Vulkan on a first run, and a head unit without a Vulkan driver (the
+     * Sealion 7) then hangs before the game boots. Without a config yet, start it on OpenGL.
+     */
+    private fun pspOpenGl() {
+        val ini = File(Environment.getExternalStorageDirectory(), "PSP/SYSTEM/ppsspp.ini")
+        if (ini.isFile) return
+        try {
+            ini.parentFile?.mkdirs()
+            ini.writeText("[Graphics]\nGraphicsBackend = 0 (OPENGL)\n")
+            Log.w(TAG, "psp: new ${ini.path} on OpenGL")
+        } catch (e: Exception) { Log.w(TAG, "psp: ${ini.path}: $e") }
     }
 
     private fun quit() {
