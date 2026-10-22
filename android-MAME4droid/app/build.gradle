@@ -26,7 +26,9 @@ android {
         // permission popup (head units without the all-files access settings screen)
         targetSdkVersion project.hasProperty('legacyStorage') ? 29 : 37
         versionCode 145
-        versionName '1.41.2'
+        // -PtestBuild: the test build plays in any gear; the release build only in P
+        versionName project.hasProperty('testBuild') ? '1.41.2-test' : '1.41.2'
+        buildConfigField 'boolean', 'GEAR_LOCK', project.hasProperty('testBuild') ? 'false' : 'true'
 
         ndk {
             moduleName = "mame4droid-jni"
@@ -100,6 +102,8 @@ dependencies {
 	// Beetle Game Room: wireless ADB shell for «게임룸 삭제»
 	// (its published pom drags in the GraalVM JUnit runner; not needed on Android)
 	implementation('dev.mobile:dadb:1.2.7') { exclude group: 'org.graalvm.buildtools' }
+	// the gear: BYD's vehicle SDK calls into hidden APIs (same as Beetle Launcher)
+	implementation 'org.lsposed.hiddenapibypass:hiddenapibypass:4.3'
 }
 
 androidComponents {

@@ -92,6 +92,8 @@ class MainActivity : Activity() {
             "tiles" -> RoomView.Mode.TILES
             else -> RoomView.Mode.ORBIT
         }
+        // release build: load the vehicle SDK now, so the first «start» does not wait for it
+        if (Gear.LOCK) Thread { Log.w(TAG, "gear: ${Gear.state(applicationContext)}") }.start()
         val need = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
         if (need.any { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }) requestPermissions(need, 1)
     }
@@ -296,6 +298,11 @@ class MainActivity : Activity() {
 
     private fun launch(g: Game) {
         if (launching) return
+        Gear.blocked(this)?.let { why ->
+            Toast.makeText(this, why, Toast.LENGTH_LONG).show()
+            Log.w(TAG, "gear: $why — ${g.name} not started")
+            return
+        }
         launching = true
         held = -1
         val recent = listOf(g.name) + recent().filter { it != g.name }
