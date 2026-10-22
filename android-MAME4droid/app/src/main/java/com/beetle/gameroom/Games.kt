@@ -103,7 +103,7 @@ object RomList {
  */
 object RomScan {
     private class Row(val title: String, val year: String, val maker: String, val cloneof: String,
-                      val bios: String, val players: String, val rotation: String)
+                      val bios: String, val players: String, val rotation: String, val disk: String)
 
     @Volatile private var db: Map<String, Row>? = null
 
@@ -111,7 +111,7 @@ object RomScan {
         assets.open("gameroom/mamedb.tsv").bufferedReader().useLines { lines ->
             for (line in lines) {
                 val p = line.split('\t')
-                if (p.size >= 8) m[p[0]] = Row(p[1], p[2], p[3], p[4], p[5], p[6], p[7])
+                if (p.size >= 8) m[p[0]] = Row(p[1], p[2], p[3], p[4], p[5], p[6], p[7], p.getOrElse(8) { "" })
             }
         }
         db = m
@@ -124,7 +124,10 @@ object RomScan {
         val db = db(assets)
         val games = sets.mapNotNull { name ->
             val r = db[name] ?: return@mapNotNull null
-            val missing = listOf(r.bios, r.cloneof).filter { it.isNotEmpty() && it !in sets }.map { "$it.zip" }
+            val missing = listOf(r.bios, r.cloneof).filter { it.isNotEmpty() && it !in sets }.map { "$it.zip" } +
+                // a game on a disc (CHD) in <rom folder>/<set>/
+                listOfNotNull(r.disk.takeIf { d -> d.isNotEmpty() &&
+                    listOf(name, r.cloneof).none { it.isNotEmpty() && File(dir, "$it/$d.chd").isFile } }?.let { "$name/$it.chd" })
             Game(name, r.title, r.year, r.maker, "", r.players, r.rotation, missing)
         }
         val collator = Collator.getInstance(Locale.KOREAN)

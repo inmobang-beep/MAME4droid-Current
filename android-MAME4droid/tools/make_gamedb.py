@@ -4,7 +4,9 @@
 Reads MAME's own machine list (`mame -listxml`, same MAME version as the engine)
 and writes app/src/main/assets/gameroom/mamedb.tsv, one line per arcade game:
 
-    name  title  year  maker  cloneof  bios  players  rotation
+    name  title  year  maker  cloneof  bios  players  rotation  disk
+
+(disk: the CHD the game needs in <rom folder>/<name>/, empty when none)
 
 The app matches the ROM files in /sdcard/MAME against it, so people only have to
 put their ROMs there. Only facts from MAME's own data; no ROMs, no artwork.
@@ -42,6 +44,8 @@ def main(xml_path):
             rotation=disp.get("rotate", "") if disp is not None else "",
             status=drv.get("status", "") if drv is not None else "",
             roms=el.find("rom") is not None or el.find("disk") is not None,
+            disk=next((d.get("name", "") for d in el.findall("disk")
+                       if d.get("status") != "nodump" and d.get("optional") != "yes"), ""),
         )
         el.clear()
 
@@ -65,7 +69,7 @@ def main(xml_path):
             continue
         clean = lambda s: s.replace("\t", " ").replace("\n", " ")
         rows.append("\t".join([name, clean(m["title"]), m["year"], clean(m["maker"]), m["cloneof"],
-                               bios_of(name), m["players"], m["rotation"]]))
+                               bios_of(name), m["players"], m["rotation"], m["disk"]]))
     rows.sort()
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
