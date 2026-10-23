@@ -39,6 +39,8 @@ import java.net.Socket;
 public final class BeetleLink implements Runnable {
 	private static final String TAG = "BeetleLink";
 	private static final int PORT = 5611;
+	/** 2P: 비틀 패드 1.33 부터 두 번째 패드를 같은 규격으로 이 창구에 보낸다. */
+	private static final int PORT_2P = 5613;
 	private static final String VIRTUAL_PAD_NAME = "Beetle Pad";
 
 	// SDL button numbers
@@ -56,17 +58,28 @@ public final class BeetleLink implements Runnable {
 	private static volatile boolean foreground = true;
 	private static final Handler ui = new Handler(Looper.getMainLooper());
 	private static final Instrumentation instr = new Instrumentation();
+	/** 이 창구가 붙어 있다(1P 의 [connected] 와 따로, 2P 에도 쓴다). */
+	private volatile boolean up;
 
 	private int lastBtn;
 	private boolean lastLt, lastRt;
+	/** 창구와 그 입력이 들어갈 MAME 플레이어(0 = 1P, 1 = 2P). */
+	private final int port, player;
+
+	private BeetleLink(int port, int player) {
+		this.port = port;
+		this.player = player;
+	}
 
 	public static void start(MAME4droid value) {
 		mm = value;
 		if (started) return;
 		started = true;
-		Thread th = new Thread(new BeetleLink(), "beetle-link");
-		th.setDaemon(true);
-		th.start();
+		for (BeetleLink l : new BeetleLink[]{new BeetleLink(PORT, 0), new BeetleLink(PORT_2P, 1)}) {
+			Thread th = new Thread(l, "beetle-link-" + (l.player + 1) + "p");
+			th.setDaemon(true);
+			th.start();
+		}
 	}
 
 	/** True once the linked pad has been used (touch controls can hide). */
@@ -77,7 +90,7 @@ public final class BeetleLink implements Runnable {
 	/** Activity resumed/paused: input is only fed while we are in front. */
 	public static void setForeground(boolean value) {
 		foreground = value;
-		if (!value) feed(0, 0f, 0f, 0f, 0f, 0f, 0f);
+		if (!value) { feed(0, 0, 0f, 0f, 0f, 0f, 0f, 0f); feed(1, 0, 0f, 0f, 0f, 0f, 0f, 0f); }
 	}
 
 	/** True for events from Beetle Pad's virtual pad while the direct link is up. */
@@ -92,25 +105,27 @@ public final class BeetleLink implements Runnable {
 		while (true) {
 			Socket s = new Socket();
 			try {
-				s.connect(new InetSocketAddress("127.0.0.1", PORT), 1000);
+				s.connect(new InetSocketAddress("127.0.0.1", port), 1000);
 				s.setTcpNoDelay(true);
 				DataInputStream in = new DataInputStream(s.getInputStream());
-				setConnected(true);
-				Log.w(TAG, "link up");
+				up = true;
+				if (player == 0) setConnected(true);
+				Log.w(TAG, "link up " + (player + 1) + "P");
 				while (true) {
 					in.readFully(buf);
 					apply(buf);
 				}
 			} catch (Throwable t) {
-				if (connected) Log.w(TAG, "link down " + t);
+				if (up) Log.w(TAG, "link down " + (player + 1) + "P " + t);
 			} finally {
 				try { s.close(); } catch (Throwable ignored) {}
 			}
-			if (connected) {
+			if (up) {
+				up = false;
 				lastBtn = 0;
 				lastLt = lastRt = false;
-				feed(0, 0f, 0f, 0f, 0f, 0f, 0f);
-				setConnected(false);
+				feed(player, 0, 0f, 0f, 0f, 0f, 0f, 0f);
+				if (player == 0) setConnected(false);
 			}
 			try { Thread.sleep(2000); } catch (InterruptedException e) { return; }
 		}
@@ -144,7 +159,8 @@ public final class BeetleLink implements Runnable {
 			lastBtn = btn;
 			return;
 		}
-		if (!active && (btn != 0 || Math.abs(lx) > 0.3f || Math.abs(ly) > 0.3f || lt || rt)) {
+		// 2P 는 게임 입력만: 옵션 창·나가기·터치 조작 숨기기는 1P 몫
+		if (player == 0 && !active && (btn != 0 || Math.abs(lx) > 0.3f || Math.abs(ly) > 0.3f || lt || rt)) {
 			active = true;
 			setConnected(true); // refresh the touch controls
 		}
@@ -155,6 +171,7 @@ public final class BeetleLink implements Runnable {
 		lastRt = rt;
 
 		// The options dialog is an Android dialog: drive it with key events instead.
+		if (player == 1 && Emulator.isInOptions()) return;
 		if (Emulator.isInOptions()) {
 			if (on(pressed, UP)) key(KeyEvent.KEYCODE_DPAD_UP);
 			if (on(pressed, DOWN)) key(KeyEvent.KEYCODE_DPAD_DOWN);
@@ -165,13 +182,13 @@ public final class BeetleLink implements Runnable {
 			return;
 		}
 
-		if (on(pressed, GUIDE)) {
+		if (player == 0 && on(pressed, GUIDE)) {
 			openOptions();
 			return;
 		}
 
 		// SELECT + START together leaves the game
-		if (on(btn, BACK) && on(btn, START) && (on(pressed, BACK) || on(pressed, START))) {
+		if (player == 0 && on(btn, BACK) && on(btn, START) && (on(pressed, BACK) || on(pressed, START))) {
 			exitGame();
 			return;
 		}
@@ -190,18 +207,22 @@ public final class BeetleLink implements Runnable {
 		if (on(btn, LEFT) || lx < -0.5f) m |= IController.LEFT_VALUE;
 		if (on(btn, RIGHT) || lx > 0.5f) m |= IController.RIGHT_VALUE;
 
-		feed(m, lx, ly, rx, ry, Math.max(ltRaw, 0) / 32767f, Math.max(rtRaw, 0) / 32767f);
+		feed(player, m, lx, ly, rx, ry, Math.max(ltRaw, 0) / 32767f, Math.max(rtRaw, 0) / 32767f);
 	}
 
-	private static void feed(int bits, float lx, float ly, float rx, float ry, float lt, float rt) {
-		Emulator.setDigitalData(0, bits);
-		Emulator.setAnalogData(Emulator.LEFT_STICK_DATA, 0, lx, -ly);
-		Emulator.setAnalogData(Emulator.RIGHT_STICK_DATA, 0, rx, -ry);
-		Emulator.setAnalogData(Emulator.TRIGGER_DATA, 0, (rt * 2.0f) - 1.0f, (lt * 2.0f) - 1.0f);
+	/**
+	 * [player] 의 입력. 엔진은 2P 가 동전(SELECT)을 한 번 넣는 순간부터 2P 를 따로 센다
+	 * (그 전에는 1P 입력이 모두에게 갈 수 있다 — myosd_droid_setDigitalData).
+	 */
+	private static void feed(int player, int bits, float lx, float ly, float rx, float ry, float lt, float rt) {
+		Emulator.setDigitalData(player, bits);
+		Emulator.setAnalogData(Emulator.LEFT_STICK_DATA, player, lx, -ly);
+		Emulator.setAnalogData(Emulator.RIGHT_STICK_DATA, player, rx, -ry);
+		Emulator.setAnalogData(Emulator.TRIGGER_DATA, player, (rt * 2.0f) - 1.0f, (lt * 2.0f) - 1.0f);
 	}
 
 	private static void openOptions() {
-		feed(0, 0f, 0f, 0f, 0f, 0f, 0f);
+		feed(0, 0, 0f, 0f, 0f, 0f, 0f, 0f);
 		ui.post(() -> {
 			MAME4droid m = mm;
 			if (m == null || Emulator.isInOptions()) return;
@@ -241,7 +262,8 @@ public final class BeetleLink implements Runnable {
 	}
 
 	private static void exitGame() {
-		feed(0, 0f, 0f, 0f, 0f, 0f, 0f);
+		feed(0, 0, 0f, 0f, 0f, 0f, 0f, 0f);
+		feed(1, 0, 0f, 0f, 0f, 0f, 0f, 0f);
 		Emulator.setValue(Emulator.EXIT_GAME, 1);
 		try { Thread.sleep(InputHandler.PRESS_WAIT); } catch (InterruptedException ignored) {}
 		Emulator.setValue(Emulator.EXIT_GAME, 0);
